@@ -13,6 +13,7 @@ import doggytalents.client.entity.model.dog.BorzoiLongModel;
 import doggytalents.client.entity.model.dog.BorzoiModel;
 import doggytalents.client.entity.model.dog.DachshundModel;
 import doggytalents.client.entity.model.dog.BrownHeelerMixModel;
+import doggytalents.client.entity.model.dog.ChuckleModel;
 import doggytalents.client.entity.model.dog.DeathModel;
 import doggytalents.client.entity.model.dog.DogModel;
 import doggytalents.client.entity.model.dog.IwankoModel;
@@ -85,6 +86,7 @@ public class DogModelRegistry {
         register("kusa_ume", ctx ->  new ChiModel(ctx.bakeLayer(ClientSetup.KUSA_UME)));
 
         register("brown_heeler_mix", ctx ->  new BrownHeelerMixModel(ctx.bakeLayer(ClientSetup.DOG_BROWN_HEELER_MIX)));
+        register("chuckle", ctx ->  new ChuckleModel(ctx.bakeLayer(ClientSetup.DOG_CHUCKLE)));
     }
 
     public static class DogModelHolder {
