@@ -20,7 +20,7 @@ import doggytalents.client.entity.model.dog.BrownHeelerMixModel;
 import doggytalents.client.entity.model.dog.ChuckleModel;
 import doggytalents.client.entity.model.dog.DeathModel;
 import doggytalents.client.entity.model.dog.DogModel;
-import doggytalents.client.entity.model.dog.Heeler2Model;
+
 import doggytalents.client.entity.model.dog.HeelerModel;
 import doggytalents.client.entity.model.dog.IwankoModel;
 import doggytalents.client.entity.model.dog.JackModel;
@@ -145,7 +145,6 @@ public class ClientSetup {
         event.registerLayerDefinition(DOG_BROWN_HEELER_MIX, BrownHeelerMixModel::createBodyLayer);
         event.registerLayerDefinition(DOG_CHUCKLE, ChuckleModel::createBodyLayer);
         event.registerLayerDefinition(DOG_HEELER, HeelerModel::createBodyLayer);
-        event.registerLayerDefinition(DOG_HEELER2, Heeler2Model::createBodyLayer);
 
         event.registerLayerDefinition(DOG_ARMOR, DogArmorModel::createBodyLayer);
         event.registerLayerDefinition(DOG_FRONT_LEGS_SEPERATE, DogFrontLegsSeperate::createBodyLayer);

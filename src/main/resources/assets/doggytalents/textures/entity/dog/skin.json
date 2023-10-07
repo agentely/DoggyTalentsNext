@@ -346,14 +346,14 @@
         },
         {
             "skin_name" : "Heeler (Light Blue}",
-            "skin_id" : "heeler2_lightblue",
-            "use_model" : "heeler2",
+            "skin_id" : "heeler_lightblue",
+            "use_model" : "heeler",
             "author" : "AuthenticEmma"
         },
         {
             "skin_name" : "Heeler (Black/White}",
-            "skin_id" : "heeler2_blackwhite",
-            "use_model" : "heeler2",
+            "skin_id" : "heeler_blackwhite",
+            "use_model" : "heeler",
             "author" : "AuthenticEmma"
         },
         {
