@@ -327,6 +327,12 @@
             "author" : "AuthenticEmma"
         },
         {
+            "skin_name" : "Heeler (Bright Red)",
+            "skin_id" : "heeler_brightred",
+            "use_model" : "heeler",
+            "author" : "AuthenticEmma"
+        },
+        {
             "skin_name" : "Heeler (Blue)",
             "skin_id" : "heeler_bluesolid",
             "use_model" : "heeler",
@@ -342,12 +348,6 @@
             "skin_name" : "Heeler (Light Blue}",
             "skin_id" : "heeler2_lightblue",
             "use_model" : "heeler2",
-            "author" : "AuthenticEmma"
-        },
-        {
-            "skin_name" : "TEST",
-            "skin_id" : "heeler2_lightblue",
-            "use_model" : "heeler",
             "author" : "AuthenticEmma"
         },
         {
