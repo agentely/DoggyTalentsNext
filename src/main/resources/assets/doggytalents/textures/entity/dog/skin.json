@@ -315,12 +315,6 @@
             "mystery" : true
         },
         {
-            "skin_name" : "Brown Heeler Mix",
-            "skin_id" : "brown_heeler_mix",
-            "use_model" : "brown_heeler_mix",
-            "author" : "AuthenticEmma"
-        },
-        {
             "skin_name" : "Heeler (Red Solid)",
             "skin_id" : "heeler_redsolid",
             "use_model" : "heeler",
@@ -333,10 +327,41 @@
             "author" : "AuthenticEmma"
         },
         {
+            "skin_name" : "Heeler (Blue)",
+            "skin_id" : "heeler_bluesolid",
+            "use_model" : "heeler",
+            "author" : "AuthenticEmma"
+        },
+        {
+            "skin_name" : "Heeler (Brown)",
+            "skin_id" : "heeler_brown",
+            "use_model" : "heeler",
+            "author" : "AuthenticEmma"
+        },
+        {
+            "skin_name" : "Heeler (Light Blue}",
+            "skin_id" : "heeler2_lightblue",
+            "use_model" : "heeler2",
+            "author" : "AuthenticEmma"
+        },
+        {
+            "skin_name" : "TEST",
+            "skin_id" : "heeler2_lightblue",
+            "use_model" : "heeler",
+            "author" : "AuthenticEmma"
+        },
+        {
+            "skin_name" : "Heeler (Black/White}",
+            "skin_id" : "heeler2_blackwhite",
+            "use_model" : "heeler2",
+            "author" : "AuthenticEmma"
+        },
+        {
             
-            "skin_name" : "Charlie aka. Chuckle",
+            "skin_name" : "Chuckle",
             "skin_id" : "chuckle",
             "use_model" : "chuckle",
+            "based_on" : "A beloved pet.",
             "author" : "AuthenticEmma"
         }
     ]
