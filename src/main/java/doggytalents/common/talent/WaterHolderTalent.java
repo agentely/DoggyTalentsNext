@@ -108,7 +108,7 @@ public class WaterHolderTalent extends TalentInstance {
         if (
             //!dog.isInSittingPose() 
             dog.readyForNonTrivialAction()
-            && (dog.isMode(EnumMode.DOCILE, EnumMode.GUARD_MINOR)) 
+            && (!dog.getMode().shouldAttack()) 
             && dog.onGround()
             && --this.ticktillSearch <= 0
         ) {
@@ -140,7 +140,7 @@ public class WaterHolderTalent extends TalentInstance {
         if (stack.getItem() instanceof BucketItem) {
             if (!dog.level().isClientSide) {
                 if (player.isShiftKeyDown()) {
-                    var c1 = Component.translatable("talent.doggytalents.water_holder.amount");
+                    var c1 = Component.translatable("talent.doggytalents.water_holder.amount", dog.getName().getString());
                     c1.append(Component.literal(": "));
                     if (this.level < this.talent.getMaxLevel()) {
                         c1.append(Component.literal("" +this.getWaterUnitleft())
@@ -399,14 +399,14 @@ public class WaterHolderTalent extends TalentInstance {
 
         @Override
         public void onStart() {
-            this.dog.getLookControl().setLookAt(target, 10.0F, this.dog.getMaxHeadXRot());
+            //this.dog.getLookControl().setLookAt(target, 10.0F, this.dog.getMaxHeadXRot());
             ticksUntilPathRecalc = 0;
         }
 
         @Override
         public void tick() {
 
-            if (!this.dog.isMode(EnumMode.DOCILE, EnumMode.GUARD_MINOR)) {
+            if (this.dog.getMode().shouldAttack()) {
                 this.setState(ActionState.FINISHED); return;
             }
 

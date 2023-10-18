@@ -43,6 +43,11 @@ public class DogAnimationRegistry {
         register(DogAnimation.CHOPIN_TAIL, DogAnimationSequences.CHOPIN_TAIL);
         register(DogAnimation.BELLY_RUB, DogAnimationSequences.BELLY_RUB);
         register(DogAnimation.SIT_IDLE_2, DogAnimationSequences.SIT_IDLE_2);
+        register(DogAnimation.HOWL, DogAnimationSequences.HOWL);
+        register(DogAnimation.LIE_DOWN_IDLE, DogAnimationSequences.LIE_DOWN_IDLE);
+        register(DogAnimation.SIT_TO_REST, DogAnimationSequences2.SIT_TO_REST);
+        register(DogAnimation.REST_IDLE, DogAnimationSequences2.REST_IDLE);
+        register(DogAnimation.REST_TO_SIT, DogAnimationSequences2.REST_TO_SIT);
     }
     
 }

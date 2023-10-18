@@ -62,7 +62,7 @@ public class RescueDogTalent extends TalentInstance {
         
         if (
             dog.readyForNonTrivialAction() 
-            && (dog.isMode(EnumMode.DOCILE, EnumMode.GUARD_MINOR)) 
+            && !dog.getMode().shouldAttack() 
             && --this.tickTillSearch <= 0
         ) {
             this.tickTillSearch = 10;
@@ -265,13 +265,13 @@ public class RescueDogTalent extends TalentInstance {
 
         @Override
         public void onStart() {
-            this.dog.getLookControl().setLookAt(target, 10.0F, this.dog.getMaxHeadXRot());
+            //this.dog.getLookControl().setLookAt(target, 10.0F, this.dog.getMaxHeadXRot());
             ticksUntilPathRecalc = 0;
         }
 
         @Override
         public void tick() {
-            if (!this.dog.isMode(EnumMode.DOCILE, EnumMode.GUARD_MINOR)) {
+            if (this.dog.getMode().shouldAttack()) {
                 this.setState(ActionState.FINISHED); return;
             }
 

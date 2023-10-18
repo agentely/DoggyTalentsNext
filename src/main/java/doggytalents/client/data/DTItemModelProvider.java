@@ -78,6 +78,13 @@ public class DTItemModelProvider extends ItemModelProvider {
         generated(DoggyItems.FEATHERED_MANTLE);
         generated(DoggyItems.EMPTY_LOCATOR_ORB);
 
+        generated(DoggyItems.HOT_DOG);
+        generated(DoggyItems.GIANT_STICK);
+        generated(DoggyItems.GOLDEN_A_FIVE_WAGYU);
+        generated(DoggyItems.SUSSY_SICKLE);
+        generated(DoggyItems.SNORKEL);
+
+
         generated(DoggyItems.CHI_ORB);
         generated(DoggyItems.CHU_ORB);
         generated(DoggyItems.KO_ORB);
@@ -88,6 +95,7 @@ public class DTItemModelProvider extends ItemModelProvider {
         generated(DoggyItems.JIN_ORB);
 
         generated(DoggyItems.GENDER_BONE);
+        generated(DoggyItems.STARTER_BUNDLE);
 
         generated(DoggyItems.MUSIC_DISC_BWV_849_FUGUE_KIMIKO);
         generated(DoggyItems.MUSIC_DISC_BWV_1080_FUGUE_11_KIMIKO);

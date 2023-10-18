@@ -15,6 +15,10 @@ public class AnimationAction extends TriggerableAction {
 
     @Override
     public void onStart() {
+        if (!this.validateAnim()) {
+            this.setState(ActionState.FINISHED);
+            return;
+        }
         this.dog.setAnim(anim);
     }
 
@@ -46,6 +50,10 @@ public class AnimationAction extends TriggerableAction {
     }
 
     public boolean blockLook() {
+        return false;
+    }
+
+    public boolean blockSitStandAnim() {
         return false;
     }
     

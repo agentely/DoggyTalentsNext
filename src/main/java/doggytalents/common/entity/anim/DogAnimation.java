@@ -1,6 +1,6 @@
 package doggytalents.common.entity.anim;
 
-import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.util.Mth;
 
 public enum DogAnimation {
     
@@ -25,12 +25,18 @@ public enum DogAnimation {
     SCRATCHIE(18, 70),
     CHOPIN_TAIL(19, 200),
     BELLY_RUB(20, 11*20, 1f, false),
-    SIT_IDLE_2(21, 100);
+    SIT_IDLE_2(21, 100),
+    HOWL(22, 165),
+    LIE_DOWN_IDLE(23, 20, 0.5f, true, true),
+    SIT_TO_REST(24, 40, 0.5f),
+    REST_IDLE(25, 20, 0.75f, true, true),
+    REST_TO_SIT(26, 65);
 
     private final int id;
     private final int lengthTicks;
     private final float speedModifier;
     private final boolean freeTail;
+    private boolean looping = false;
     
     private DogAnimation(int id, int lengthTicks) {
         this.id = id;
@@ -41,16 +47,24 @@ public enum DogAnimation {
 
     private DogAnimation(int id, int lengthTicks, float speed) {
         this.id = id;
-        this.lengthTicks = lengthTicks;
+        this.lengthTicks = Mth.ceil(((float)lengthTicks)/speed);
         this.speedModifier = speed;
         freeTail = true;
     }
 
     private DogAnimation(int id, int lengthTicks, float speed, boolean freeTail) {
         this.id = id;
-        this.lengthTicks = lengthTicks;
+        this.lengthTicks = Mth.ceil(((float)lengthTicks)/speed);
         this.speedModifier = speed;
         this.freeTail = freeTail;
+    }
+
+    private DogAnimation(int id, int lengthTicks, float speed, boolean freeTail, boolean looping) {
+        this.id = id;
+        this.lengthTicks = Mth.ceil(((float)lengthTicks)/speed);
+        this.speedModifier = speed;
+        this.freeTail = freeTail;
+        this.looping = looping;
     }
 
     public static DogAnimation byId(int i) {
@@ -64,6 +78,6 @@ public enum DogAnimation {
     public int getLengthTicks() { return this.lengthTicks; }
     public float getSpeedModifier() { return this.speedModifier; }
     public boolean freeTail() { return this.freeTail; }
-
+    public boolean looping() { return this.looping; }
 
 }

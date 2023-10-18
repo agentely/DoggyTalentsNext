@@ -6,6 +6,7 @@ import java.util.List;
 import doggytalents.DoggyBlocks;
 import doggytalents.common.entity.Dog;
 import doggytalents.common.entity.anim.DogAnimation;
+import doggytalents.common.entity.anim.DogPose;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -65,10 +66,14 @@ public class DogGoRestOnBedGoalDefeated extends Goal {
     public void stop() {
         this.dog.getNavigation().stop();
         this.dog.setInSittingPose(false);
+        if (dog.getAnim() == DogAnimation.LIE_DOWN_IDLE) {
+            dog.setAnim(DogAnimation.NONE);
+        }
     }
 
     @Override
     public void tick() {
+        idleIfLyingElseInvalidate();
         validateTarget();
         if (this.targetBed == null)
             return;
@@ -87,12 +92,23 @@ public class DogGoRestOnBedGoalDefeated extends Goal {
             targetBed.getY(), targetBed.getZ() + 0.5, 1);
         }
         if (d_targetBed < 1) {
-            if (!this.dog.isInSittingPose())
-            this.dog.setSitAnim(DogAnimation.LYING_DOWN);
-            this.dog.setInSittingPose(true);
-            
+            if (!this.dog.isInSittingPose()) {
+                this.dog.setSitAnim(DogAnimation.LYING_DOWN);
+                this.dog.setInSittingPose(true);
+            }
         } else {
             this.dog.setInSittingPose(false);
+        }
+    }
+
+    private void idleIfLyingElseInvalidate() {
+        if (dog.getDogPose() == DogPose.LYING_2 && dog.getAnim() == DogAnimation.NONE) {
+            this.dog.setAnim(DogAnimation.LIE_DOWN_IDLE);
+            return;
+        }
+        if (dog.getDogPose() != DogPose.LYING_2 && dog.getAnim() == DogAnimation.LIE_DOWN_IDLE) {
+            this.dog.setAnim(DogAnimation.NONE);
+            return;
         }
     }
 

@@ -15,15 +15,37 @@ import net.minecraft.resources.ResourceLocation;
 
 public class DogSkin {
 
-    public static final DogSkin CLASSICAL = (new DogSkin(Resources.ENTITY_WOLF){
+    public static final DogSkin CLASSICAL = (new DogSkin(Resources.DOG_CLASSICAL){
         @Override
         public ResourceLocation getPath() {
-            if (ConfigHandler.CLIENT.USE_PROVIDED_COPY_FOR_CLASSICAL.get())
-                return Resources.DOG_CLASSICAL;
+            if (ConfigHandler.CLIENT.USE_VANILLA_RES_FOR_CLASSICAL.get())
+                return Resources.ENTITY_WOLF;
             return super.getPath();
         }
+
+        @Override
+        public boolean hasExtraInfo() {
+            return true;
+        }
+        @Override
+        public String getDesc() {
+            return "The Default Skin. Mhmmmm! Classy!";
+        }
+        @Override
+        public String getTags() {
+            return "default, classical";
+        }
     }).setName("Classical");
-    public static final DogSkin MISSING = new DogSkin(Resources.ENTITY_WOLF).setName("<Missing>");
+    public static final DogSkin MISSING = (new DogSkin(Resources.DOG_CLASSICAL){
+        @Override
+        public ResourceLocation getPath() {
+            if (ConfigHandler.CLIENT.USE_VANILLA_RES_FOR_CLASSICAL.get())
+                return Resources.ENTITY_WOLF;
+            return super.getPath();
+        }
+    }).setName("<Missing>");
+    public static final DogSkin MYSTERY = (new DogSkin(Resources.DOG_MYSTERY){
+    }).setName("<Mystery>");
 
     private String name = "";
     private ResourceLocation texturePath;
@@ -36,6 +58,9 @@ public class DogSkin {
     private String basedOn = "";
     private String author = "";
     private String fromPack = "";
+    private String description = "";
+    private String tags = "";
+    private boolean mystery = false;
 
     public DogSkin(ResourceLocation path) {
         this.texturePath = path;
@@ -98,15 +123,34 @@ public class DogSkin {
         else this.basedOn = basedOn;
     }
 
+    public void setDesc(String desc) {
+        this.hasExtraInfo = true;
+        if (desc == null) this.description = "";
+        else this.description = desc;
+    }
+
+    public void setTags(String tags) {
+        this.hasExtraInfo = true;
+        if (tags == null) this.tags = "";
+        else this.tags = tags;
+    }
+
     public void setPack(String fromPack) {
         this.hasExtraInfo = true;
         if (fromPack == null) this.fromPack = "";
         else this.fromPack = fromPack;
     }
 
+    public void setMystery(boolean val) {
+        this.mystery = val;
+    }
+
     public boolean hasExtraInfo() { return this.hasExtraInfo; }
     public String getBasedOn() { return this.basedOn; }
     public String getAuthor() { return this.author; }
     public String getPack() { return this.fromPack; }
+    public String getDesc() { return this.description; }
+    public String getTags() { return this.tags; }
+    public boolean mystery() { return this.mystery; }
 
 }

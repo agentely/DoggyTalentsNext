@@ -2,6 +2,7 @@ package doggytalents.api.inferface;
 
 import doggytalents.api.enu.WetSource;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -158,6 +159,11 @@ public interface IDogAlteration {
         return InteractionResultHolder.pass(currentAir);
     }
 
+    default InteractionResult canStandOnFluid(AbstractDog dogIn, FluidState state) {
+        return InteractionResult.PASS;
+    }
+
+
     default InteractionResultHolder<Integer> setFire(AbstractDog dogIn, int second) {
         return InteractionResultHolder.pass(second);
     }
@@ -210,18 +216,25 @@ public interface IDogAlteration {
         return InteractionResult.PASS;
     }
 
+    default InteractionResult blockIdleAnim(AbstractDog dogIn) {
+        return InteractionResult.PASS;
+    }
+
     /**
-     * Return success when the block type can substitute walakable.
-     * For example: 
-     * FlameDog 5 : LAVA = WALKABLE
-     * SwimmerDog 5 : WATER = WALKABLE
-     * since both instances can breathe indefinitly under each substance.
+     * Re-infer the type to be a safer type if possible.
+     * Noticed that this function here doesnt serve to
+     * "dangerify" a path type, only to substitude a safer type
+     * to show that the dog can handle that type. 
      * 
      * @param dog
      * @param pos
      * @return
      */
-    default InteractionResult isBlockTypeWalkable(AbstractDog dog, BlockPathTypes type) {
+    default InteractionResultHolder<BlockPathTypes> inferType(AbstractDog dog, BlockPathTypes type) {
+        return InteractionResultHolder.pass(type);
+    }
+
+    default InteractionResult negateExplosion(AbstractDog dog) {
         return InteractionResult.PASS;
     }
 

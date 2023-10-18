@@ -28,6 +28,11 @@ public class DogSitWhenOrderedGoal extends SitWhenOrderedToGoal {
         ) {
             return false;
         }
+        //Passaenger dog always wants to sit down.
+        if (dog.isPassenger()) return true;
+        var mode = this.dog.getMode();
+        if (mode.canWander() && !mode.shouldAttack() && dog.isWanderResting())
+            return true;
         return super.canUse();
     }
 
@@ -54,9 +59,12 @@ public class DogSitWhenOrderedGoal extends SitWhenOrderedToGoal {
         if (action != null && action.canPreventSit() && !dog.forceSit()) {
             return false;
         }
-        if (this.dog.isOrderedToSit()) {
+        if (this.dog.isOrderedToSit() || this.dog.isPassenger()) {
             return true;
         }
+        var mode = this.dog.getMode();
+        if (mode.canWander() && !mode.shouldAttack() && dog.isWanderResting())
+            return true;
 
         //Fix dog repeatedly sitting and standing if
         //owner logged out without orderingDogToSit.

@@ -18,8 +18,6 @@ public final class PacketHandler {
         registerPacket(new DogTalentPacket(), DogTalentData.class);
         //registerPacket(new DogTexturePacket(), DogTextureData.class);
         registerPacket(new FriendlyFirePacket(), FriendlyFireData.class);
-        registerPacket(new SendSkinPacket(), SendSkinData.class);
-        registerPacket(new RequestSkinPacket(), RequestSkinData.class);
         registerPacket(new OpenDogScreenPacket(), OpenDogScreenData.class);
         registerPacket(new DogInventoryPagePacket(), DogInventoryPageData.class);
         registerPacket(new DogTexturePacket(), DogTextureData.class);
@@ -58,6 +56,7 @@ public final class PacketHandler {
         registerPacket(new ChangeArtifactPacket(), ChangeArtifactData.class);
         registerPacket(new DogIncapMsgPackets.Request(), DogIncapMsgData.Request.class);
         registerPacket(new DogIncapMsgPackets.Response(), DogIncapMsgData.Response.class);
+        registerPacket(new PatrolTargetLockPacket(), PatrolTargetLockData.class);
     }
 
     public static <MSG> void send(PacketDistributor.PacketTarget target, MSG message) {

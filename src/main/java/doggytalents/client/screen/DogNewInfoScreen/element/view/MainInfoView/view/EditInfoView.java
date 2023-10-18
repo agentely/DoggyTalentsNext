@@ -21,6 +21,7 @@ import doggytalents.common.network.packet.data.DogNameData;
 import doggytalents.common.network.packet.data.DogObeyData;
 import doggytalents.common.network.packet.data.DogRegardTeamPlayersData;
 import doggytalents.common.network.packet.data.FriendlyFireData;
+import doggytalents.common.network.packet.data.PatrolTargetLockData;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -139,7 +140,7 @@ public class EditInfoView extends AbstractElement {
                         }
                     }
                 },
-                I18n.get(I18n.get("doggui.force_sit"))
+                I18n.get("doggui.force_sit")
             )
             .init()
         );
@@ -163,7 +164,31 @@ public class EditInfoView extends AbstractElement {
                         }
                     }
                 },
-                I18n.get(I18n.get("doggui.cross_origin_tp"))
+                I18n.get("doggui.cross_origin_tp")
+            )
+            .init()
+        );
+
+        scroll.addChildren(
+            new ButtonOptionEntry(scroll, getScreen(), 
+                new FlatButton(
+                    0, 0,
+                    40, 20, Component.literal("" + this.dog.patrolTargetLock()), 
+                    b -> {
+                        Boolean newVal = !this.dog.patrolTargetLock();
+                        b.setMessage(Component.literal("" + newVal));
+                        this.requestPatrolTargetLock(newVal);
+                    }     
+                ) {
+                    @Override
+                    public void render(GuiGraphics graphics, int mouseX, int mouseY, float pTicks) {
+                        super.render(graphics, mouseX, mouseY, pTicks);
+                        if (this.isHovered) {
+                            ToolTipOverlayManager.get().setComponents(ScreenUtil.splitInto(I18n.get("doggui.patrol_target_lock.help"), 150, font));
+                        }
+                    }
+                },
+                I18n.get("doggui.patrol_target_lock")
             )
             .init()
         );
@@ -225,6 +250,12 @@ public class EditInfoView extends AbstractElement {
         PacketHandler
             .send(PacketDistributor.SERVER.noArg(), 
             new CrossOriginTpData(this.dog.getId(), val));
+    }
+
+    private void requestPatrolTargetLock(boolean val) {
+        PacketHandler
+            .send(PacketDistributor.SERVER.noArg(), 
+            new PatrolTargetLockData(this.dog.getId(), val));
     }
 
     private static class NewnameEntry extends AbstractElement {

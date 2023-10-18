@@ -1,5 +1,7 @@
 package doggytalents.client.entity.render;
 
+import java.util.Objects;
+
 import org.joml.Matrix4f;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -75,10 +77,6 @@ public class DogRenderer extends MobRenderer<Dog, DogModel> {
             this.model.setColor(f, f, f);
         }
 
-        if (this.model.modelNeedRefreshBeforeCurrentRender(dog)) {
-            this.model.resetAllPose();
-        }
-
         if (ConfigHandler.CLIENT.BLOCK_THIRD_PARTY_NAMETAG.get()) {
             MobRenderer_render(dog, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
         } else
@@ -90,16 +88,6 @@ public class DogRenderer extends MobRenderer<Dog, DogModel> {
 
         if (this.model.hasAdditonalRendering())
             this.model.doAdditonalRendering(dog, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
-
-        if (this.model.modelNeedRefreshBeforeNextRender(dog)) {
-            this.model.resetAllPose();
-        }
-
-        if (model != defaultModel
-            && model.useDefaultModelForAccessories() 
-            && this.defaultModel.modelNeedRefreshBeforeNextRender(dog)) {
-            this.defaultModel.resetAllPose();
-        }
     }
 
     private Component getNameUnknown(Dog dogIn) {
@@ -113,7 +101,14 @@ public class DogRenderer extends MobRenderer<Dog, DogModel> {
 
     @Override
     protected void scale(Dog dogIn, PoseStack matrixStackIn, float partialTickTime) {
-        float size = dogIn.getDogSize().getScale();
+        float size = dogIn.isBaby() ? 0.5f 
+            : dogIn.getDogSize().getScale();
+        var skin = dogIn.getClientSkin();
+        if (skin.useCustomModel()) {
+            var model = skin.getCustomModel().getValue();
+            if (model.hasDefaultScale())
+                size *= model.getDefaultScale();
+        }
         matrixStackIn.scale(size, size, size);
         this.shadowRadius = size * 0.5F;
     }
@@ -127,7 +122,7 @@ public class DogRenderer extends MobRenderer<Dog, DogModel> {
             ConfigHandler.ClientConfig.getConfig(ConfigHandler.CLIENT.RENDER_DIFFOWNER_NAME_DIFFERENT)
             && dog != this.entityRenderDispatcher.crosshairPickEntity;
         boolean isDiffOwner = 
-            (player == null || !player.getUUID().equals(dog.getOwnerUUID()));
+            (player == null || !Objects.equals(player.getUUID(), dog.getOwnerUUID()));
 
         if (net.minecraftforge.client.ForgeHooksClient.isNameplateInRenderDistance(dog, d0))
             renderMainName(dog, text, stack, buffer, packedLight, d0, renderDiffOwnerName && isDiffOwner);

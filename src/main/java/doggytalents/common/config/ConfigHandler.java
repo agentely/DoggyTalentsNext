@@ -62,9 +62,11 @@ public class ConfigHandler {
         public ForgeConfigSpec.BooleanValue RENDER_INCAP_TXT_LESS_GRAPHIC;
         public ForgeConfigSpec.BooleanValue RENDER_DIFFOWNER_NAME_DIFFERENT;
         public ForgeConfigSpec.BooleanValue BLOCK_THIRD_PARTY_NAMETAG;
-        public ForgeConfigSpec.BooleanValue USE_PROVIDED_COPY_FOR_CLASSICAL;
+        public ForgeConfigSpec.BooleanValue USE_VANILLA_RES_FOR_CLASSICAL;
         public ForgeConfigSpec.BooleanValue WORD_LOAD_ICON;
         public ForgeConfigSpec.BooleanValue RENDER_ARMOR;
+        public ForgeConfigSpec.BooleanValue BLOCK_RED_OVERLAY_WHEN_HURT;
+        public ForgeConfigSpec.BooleanValue DISPLAY_SMOKE_WHEN_ON_FIRE;
 
         public ClientConfig(ForgeConfigSpec.Builder builder) {
             builder.push("General");
@@ -123,12 +125,13 @@ public class ConfigHandler {
                 .comment("(Which they should). This option should only be used as the last resort.")
                 .translation("doggytalents.config.client.block_third_party_nametag")
                 .define("block_third_party_nametag", false);
-            USE_PROVIDED_COPY_FOR_CLASSICAL = builder
-                .comment("By defeault, the CLASSICAL skin directly references the")
-                .comment("in-game vanilla wolf texture for rendering. Turning this on")
-                .comment("will allow a copy of the vanilla wolf texture provided by the mod to be used instead.")
-                .translation("doggytalents.config.client.use_provided_copy_for_classical")
-                .define("use_provided_copy_for_classical", false);
+            USE_VANILLA_RES_FOR_CLASSICAL = builder
+                .comment("By defeault, a copy of the Classical (Vanilla Wolf Texture) provided by the mod")
+                .comment("is used to render The Classical Skin, this is to avoid conflicts with resources packs")
+                .comment("like Fresh Animations which are directly using the in-game wolf texture. Turning this on")
+                .comment("will make DTN directly reference the in-game texture.")
+                .translation("doggytalents.config.client.use_vanilla_res_for_classical")
+                .define("use_vanilla_res_for_classical", false);
             WORD_LOAD_ICON = builder
                 .comment("Show a fun icon on world loading screen.")
                 .translation("doggytalents.config.client.world_load_icon")
@@ -137,6 +140,16 @@ public class ConfigHandler {
                 .comment("Determine if dogs will render their armor.")
                 .translation("doggytalents.config.client.render_armor")
                 .define("render_armor", true);
+            BLOCK_RED_OVERLAY_WHEN_HURT = builder
+                .comment("Determine if dogs still render with a red overlay upon hurt like they usually do.")
+                .comment("This can be toggled on if user prefer to not having the red overlay and rely on the animation")
+                .comment("to indicate hurting.")
+                .translation("doggytalents.config.client.block_red_overlay_when_hurt")
+                .define("block_red_overlay_when_hurt", false);
+            DISPLAY_SMOKE_WHEN_ON_FIRE = builder
+                .comment("Display extra smoke when dog is on fire.")
+                .translation("doggytalents.config.client.display_smoke_when_on_fire")
+                .define("display_smoke_when_on_fire", true);
             builder.pop();
         }
 
@@ -169,6 +182,7 @@ public class ConfigHandler {
         public ForgeConfigSpec.IntValue MAX_HEEL_LIMIT;
         public ForgeConfigSpec.BooleanValue PREVENT_DOGS_PUSHING_EACH_OTHER;
         public ForgeConfigSpec.IntValue TICK_PER_HUNGER_DEC;
+        public ForgeConfigSpec.BooleanValue PRESERVE_UUID;
 
         public Map<String, ForgeConfigSpec.BooleanValue> DISABLED_TALENTS;
 
@@ -266,6 +280,11 @@ public class ConfigHandler {
                 .comment("Configure how many ticks it usually take for the dog to drop one hunger unit.")
                 .translation("doggytalents.tick_per_hunger_dec")
                 .defineInRange("tick_per_hunger_dec", 400, 10, Integer.MAX_VALUE);
+            PRESERVE_UUID = builder
+                .comment("Determine if the UUIDs of the dogs are being kept when training from vanilla")
+                .comment("and when they respawn on bed.")
+                .translation("doggytalents.preserve_uuid")
+                .define("preserve_uuid", true);
             builder.pop();
 
             

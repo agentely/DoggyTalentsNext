@@ -68,11 +68,16 @@ public class DogMeleeAttackGoal extends Goal {
 
       if (this.dog.fallDistance > 7) return false;
       
-      var owner = this.dog.getOwner();
+      boolean restriction = false;
+      if (this.dog.getMode().shouldFollowOwner()) {
+         var owner = this.dog.getOwner();
 
-      if (owner != null) {
-         if (this.dog.distanceToSqr(owner) > this.getMaxDistanceAwayFromOwner()) 
-            return false;
+         if (owner != null) {
+            if (this.dog.distanceToSqr(owner) > this.getMaxDistanceAwayFromOwner()) 
+               return false;
+         }
+      } else {
+         restriction = !this.dog.patrolTargetLock();
       }
 
       LivingEntity target = this.dog.getTarget();
@@ -80,6 +85,8 @@ public class DogMeleeAttackGoal extends Goal {
          return false;
       } else if (!target.isAlive()) {
          this.dog.setTarget(null); // Disacrd dead target no matter what
+         return false;
+      } else if (restriction && !this.dog.isWithinRestriction(target.blockPosition())) {
          return false;
       }
 
@@ -134,12 +141,18 @@ public class DogMeleeAttackGoal extends Goal {
 
       if (this.dog.fallDistance > 7) return false;
 
-      var owner = this.dog.getOwner();
+      boolean restriction = false;
+      if (this.dog.getMode().shouldFollowOwner()) {
+         var owner = this.dog.getOwner();
 
-      if (owner != null) {
-         if (this.dog.distanceToSqr(owner) > this.getMaxDistanceAwayFromOwner()) 
-            return false;
+         if (owner != null) {
+            if (this.dog.distanceToSqr(owner) > this.getMaxDistanceAwayFromOwner()) 
+               return false;
+         }
+      } else {
+         restriction = !this.dog.patrolTargetLock();
       }
+      
 
       if (this.waitingTick > this.timeOutTick) return false;
       
@@ -151,7 +164,7 @@ public class DogMeleeAttackGoal extends Goal {
          return false;
       } else if (!this.followingTargetEvenIfNotSeen) {
          return !this.dog.getNavigation().isDone();
-      } else if (!this.dog.isWithinRestriction(livingentity.blockPosition())) {
+      } else if (restriction && !this.dog.isWithinRestriction(livingentity.blockPosition())) {
          return false;
       } else {
          return !(livingentity instanceof Player)
@@ -300,7 +313,9 @@ public class DogMeleeAttackGoal extends Goal {
    protected boolean isTargetInSafeArea(Dog dog, LivingEntity target) {
       var type = WalkNodeEvaluator.getBlockPathTypeStatic(dog.level(), target.blockPosition().mutable());
       for (var x : dog.getAlterations()) {
-         if (x.isBlockTypeWalkable(dog, type).shouldSwing()) {
+         var type_result = x.inferType(dog, type);
+         if (type_result.getResult().shouldSwing() 
+            && type_result.getObject() == BlockPathTypes.WALKABLE) {
             type = BlockPathTypes.WALKABLE;
             break;
          }

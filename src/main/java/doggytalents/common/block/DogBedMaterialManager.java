@@ -102,15 +102,20 @@ public class DogBedMaterialManager {
     }
 
     public static IBeddingMaterial randomBedding() {
-        var list = new ArrayList<>(beddingMap.entrySet());
+        var list = beddingMap.entrySet().stream()
+            .filter(x -> !(x.getValue() instanceof NaniBedding))
+            .collect(Collectors.toList());
         if (list.isEmpty()) {
             return NaniBedding.NULL;
         }
+        
         return list.get(RANDOM.nextInt(list.size())).getValue();
     }
 
     public static ICasingMaterial randomCasing() {
-        var list = new ArrayList<>(casingMap.entrySet());
+        var list = casingMap.entrySet().stream()
+            .filter(x -> !(x.getValue() instanceof NaniCasing))
+            .collect(Collectors.toList());
         if (list.isEmpty()) {
             return NaniCasing.NULL;
         }

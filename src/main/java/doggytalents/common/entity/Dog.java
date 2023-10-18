@@ -13,11 +13,13 @@ import doggytalents.api.inferface.IThrowableItem;
 import doggytalents.api.registry.*;
 import doggytalents.client.DogTextureManager;
 import doggytalents.client.entity.skin.DogSkin;
+import doggytalents.client.event.ClientEventHandler;
 import doggytalents.client.screen.DogNewInfoScreen.DogNewInfoScreen;
 import doggytalents.client.screen.DogNewInfoScreen.screen.DogCannotInteractWithScreen;
 import doggytalents.common.artifacts.DoggyArtifact;
 import doggytalents.common.config.ConfigHandler;
 import doggytalents.common.config.ConfigHandler.ClientConfig;
+import doggytalents.common.entity.ai.nav.DogBodyRotationControl;
 import doggytalents.common.entity.ai.nav.DogMoveControl;
 import doggytalents.common.entity.ai.nav.DogPathNavigation;
 import doggytalents.common.entity.ai.triggerable.AnimationAction;
@@ -36,6 +38,7 @@ import doggytalents.common.entity.DogIncapacitatedMananger.IncapacitatedSyncStat
 import doggytalents.common.entity.ai.*;
 import doggytalents.common.entity.serializers.DimensionDependantArg;
 import doggytalents.common.entity.stats.StatsTracker;
+import doggytalents.common.entity.texture.DogSkinData;
 import doggytalents.common.item.DoggyArtifactItem;
 import doggytalents.common.network.PacketHandler;
 import doggytalents.common.network.packet.ParticlePackets;
@@ -86,6 +89,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation;
+import net.minecraft.world.entity.ai.control.BodyRotationControl;
 import net.minecraft.world.entity.ai.control.LookControl;
 import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.control.SmoothSwimmingLookControl;
@@ -105,6 +109,7 @@ import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.Snowball;
+import net.minecraft.world.entity.vehicle.AbstractMinecart;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -114,6 +119,9 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.pathfinder.BlockPathTypes;
+import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -149,12 +157,16 @@ public class Dog extends AbstractDog {
      *     5               32                  LOW_HEALTH_STRATEGY_MSB
      *     6               64                  CROSS_ORIGIN_TP
      *     7               128                 REGARD_TEAM_PLAYERS
+     *     8               256                 RESTING
+     *     9               512                 PATROL_TARGET_LOCK
+     *     .
+     *     .
+     *     31              2^31                <Reserved>
      */
-    private static final EntityDataAccessor<Byte> DOG_FLAGS = SynchedEntityData.defineId(Dog.class, EntityDataSerializers.BYTE);
+    private static final EntityDataAccessor<Integer> DOG_FLAGS = SynchedEntityData.defineId(Dog.class, EntityDataSerializers.INT);
 
     private static final EntityDataAccessor<Float> HUNGER_INT = SynchedEntityData.defineId(Dog.class, EntityDataSerializers.FLOAT);
-    private static final EntityDataAccessor<String> CUSTOM_SKIN = SynchedEntityData.defineId(Dog.class, EntityDataSerializers.STRING);
-
+   
     private static final EntityDataAccessor<ItemStack> BONE_VARIANT = SynchedEntityData.defineId(Dog.class, EntityDataSerializers.ITEM_STACK);
 
     private static final EntityDataAccessor<Integer> ANIMATION = SynchedEntityData.defineId(Dog.class, EntityDataSerializers.INT);
@@ -170,8 +182,9 @@ public class Dog extends AbstractDog {
     private static final Cache<EntityDataAccessor<IncapacitatedSyncState>> DOG_INCAP_SYNC_STATE = Cache.make(() -> (EntityDataAccessor<IncapacitatedSyncState>) SynchedEntityData.defineId(Dog.class, DoggySerializers.INCAP_SYNC_SERIALIZER.get()));
     private static final Cache<EntityDataAccessor<List<DoggyArtifactItem>>> ARTIFACTS = Cache.make(() -> (EntityDataAccessor<List<DoggyArtifactItem>>) SynchedEntityData.defineId(Dog.class, DoggySerializers.ARTIFACTS_SERIALIZER.get()));
     private static final Cache<EntityDataAccessor<DogSize>> DOG_SIZE = Cache.make(() -> (EntityDataAccessor<DogSize>) SynchedEntityData.defineId(Dog.class,  DoggySerializers.DOG_SIZE_SERIALIZER.get()));
+    private static final Cache<EntityDataAccessor<DogSkinData>> CUSTOM_SKIN = Cache.make(() -> (EntityDataAccessor<DogSkinData>) SynchedEntityData.defineId(Dog.class,  DoggySerializers.DOG_SKIN_DATA_SERIALIZER.get()));
 
-    public static final void initDataParameters() {
+    public static final void initDataParameters() { 
         ACCESSORIES.get();
         TALENTS.get();
         DOG_LEVEL.get();
@@ -214,6 +227,9 @@ public class Dog extends AbstractDog {
     protected TriggerableAction activeAction;
     protected int delayedActionStart = 0;
     protected int actionPendingTime = 0;
+    protected List<WrappedGoal> trivialBlocking;
+    protected List<WrappedGoal> nonTrivialBlocking;
+    
 
     private int hungerTick;
     private int prevHungerTick;  
@@ -221,6 +237,8 @@ public class Dog extends AbstractDog {
     private int hungerSaturationHealingTick;   
     private int healingTick;  
     private int prevHealingTick;
+    private int wanderRestTime = 0;
+    private int wanderCooldown = 0;
 
     private float headRotationCourse;
     private float headRotationCourseOld;
@@ -228,6 +246,7 @@ public class Dog extends AbstractDog {
     private boolean isShaking;
     private float timeWolfIsShaking;
     private float prevTimeWolfIsShaking;
+    private int tickUntilRest;
 
     private boolean wasInLava = false;
     private boolean shakeFire = false;
@@ -253,6 +272,7 @@ public class Dog extends AbstractDog {
         this.setTame(false);
         this.setGender(EnumGender.random(this.getRandom()));
         this.setLowHealthStrategy(LowHealthStrategy.STICK_TO_OWNER);
+        this.resetTickTillRest();
 
         this.moveControl = new DogMoveControl(this);
 
@@ -266,11 +286,11 @@ public class Dog extends AbstractDog {
         this.entityData.define(ACCESSORIES.get(), new ArrayList<>());
         this.entityData.define(TALENTS.get(), new ArrayList<>());
         this.entityData.define(LAST_KNOWN_NAME, Optional.empty());
-        this.entityData.define(DOG_FLAGS, (byte) 0);
+        this.entityData.define(DOG_FLAGS, 0);
         this.entityData.define(GENDER.get(), EnumGender.UNISEX);
         this.entityData.define(MODE.get(), EnumMode.DOCILE);
         this.entityData.define(HUNGER_INT, 60F);
-        this.entityData.define(CUSTOM_SKIN, "");
+        this.entityData.define(CUSTOM_SKIN.get(), DogSkinData.NULL);
         this.entityData.define(DOG_LEVEL.get(), new DogLevel(0, 0));
         this.entityData.define(DOG_INCAP_SYNC_STATE.get(), IncapacitatedSyncState.NONE);
         this.entityData.define(DOG_SIZE.get(), DogSize.MODERATO);
@@ -283,6 +303,9 @@ public class Dog extends AbstractDog {
 
     @Override
     protected void registerGoals() {
+        int trivial_p = 0, non_trivial_p = 0;
+        DogSitWhenOrderedGoal sitGoal = null;
+        
         int p = 1;
         this.goalSelector.addGoal(p, new DogFloatGoal(this));
         this.goalSelector.addGoal(p, new DogFindWaterGoal(this));
@@ -291,7 +314,8 @@ public class Dog extends AbstractDog {
         ++p;
         this.goalSelector.addGoal(p, new DogGoAwayFromFireGoal(this));
         ++p;
-        this.goalSelector.addGoal(p, new DogSitWhenOrderedGoal(this));
+        sitGoal = new DogSitWhenOrderedGoal(this);
+        this.goalSelector.addGoal(p, sitGoal);
         this.goalSelector.addGoal(p, new DogProtestSitOrderGoal(this));
         ++p;
         this.goalSelector.addGoal(p, new DogHungryGoal(this, 1.0f, 2.0f));
@@ -300,16 +324,18 @@ public class Dog extends AbstractDog {
         this.goalSelector.addGoal(p, new DogLowHealthGoal.RunAway(this));
         //this.goalSelector.addGoal(4, new DogLeapAtTargetGoal(this, 0.4F));
         ++p;
+        non_trivial_p = p;
         this.goalSelector.addGoal(p, new DogTriggerableGoal(this, false));
         ++p; //Prioritize Talent Action
         //All mutex by nature
         this.goalSelector.addGoal(p, new GuardModeGoal.Minor(this));
         this.goalSelector.addGoal(p, new GuardModeGoal.Major(this));
+        this.goalSelector.addGoal(p, new DogMoveBackToRestrictGoal(this));
         ++p;
         this.goalSelector.addGoal(p, new DogMeleeAttackGoal(this, 1.0D, true, 20, 40));
-        this.goalSelector.addGoal(p, new DogWanderGoal(this, 1.0D));
         this.goalSelector.addGoal(p, new DogGoRestOnBedGoalDefeated(this));
         ++p;
+        trivial_p = p;
         //Dog greet owner goal here
         this.goalSelector.addGoal(p, new DogTriggerableGoal(this, true));
         //this.goalSelector.addGoal(p, new FetchGoal(this, 1.0D, 32.0F));
@@ -326,6 +352,7 @@ public class Dog extends AbstractDog {
         this.goalSelector.addGoal(p, new DogLookAtPlayerGoal(this));
         this.goalSelector.addGoal(p, new RandomLookAroundGoal(this));
         this.goalSelector.addGoal(p, new DogRandomSitIdleGoal(this));
+        this.goalSelector.addGoal(p, new DogRestWhenSitGoal(this));
         
         this.targetSelector.addGoal(1, new DogOwnerHurtByTargetGoal(this));
         this.targetSelector.addGoal(2, new DogOwnerHurtTargetGoal(this));
@@ -333,7 +360,32 @@ public class Dog extends AbstractDog {
         this.targetSelector.addGoal(5, new DogNearestToOwnerAttackableTargetGoal<>(this, AbstractSkeleton.class, false));
         this.targetSelector.addGoal(6, new BerserkerModeGoal(this));
         this.targetSelector.addGoal(6, new GuardModeGoal(this));
+        this.targetSelector.addGoal(6, new PatrolAssistTargetGoal(this));
         //this.goalSelector.addGoal(1, new Wolf.WolfPanicGoal(1.5D)); //Stooopid...
+
+        populateActionBlockingGoals(trivial_p, non_trivial_p, sitGoal);
+    }
+
+    private void populateActionBlockingGoals(int trivialP, int nonTrivialP, DogSitWhenOrderedGoal sitGoal) {
+        nonTrivialBlocking = new ArrayList<WrappedGoal>();
+        trivialBlocking = new ArrayList<WrappedGoal>();
+
+        var trivial = this.goalSelector.getAvailableGoals()
+            .stream().filter(x -> (
+                x.getGoal() != sitGoal 
+                && x.getPriority() <= trivialP
+                && x.getFlags().contains(Goal.Flag.MOVE)    
+            ))
+            .collect(Collectors.toList());
+        var nonTrivial = this.goalSelector.getAvailableGoals()
+            .stream().filter(x -> (
+                x.getGoal() != sitGoal
+                && x.getPriority() <= nonTrivialP
+                && x.getFlags().contains(Goal.Flag.MOVE)    
+            ))
+            .collect(Collectors.toList());
+        nonTrivialBlocking.addAll(nonTrivial);
+        trivialBlocking.addAll(trivial);
     }
 
     @Override
@@ -364,6 +416,14 @@ public class Dog extends AbstractDog {
     @Override
     protected SoundEvent getDeathSound() {
         return SoundEvents.WOLF_DEATH;
+    }
+
+    protected SoundEvent getHowlSound() {
+        return SoundEvents.WOLF_HOWL;
+    }
+
+    public void howl() {
+        this.playSound(this.getHowlSound(), 1, this.getVoicePitch());
     }
 
     @Override
@@ -439,7 +499,47 @@ public class Dog extends AbstractDog {
 
     @Override
     public double getMyRidingOffset() {
-        return this.getVehicle() instanceof Player ? 0.5D : 0.0D;
+        return this.getVehicle() instanceof Player ? 0.5D : 0.2D;
+    }
+
+    @Override
+    protected void addPassenger(Entity passanger) {
+        super.addPassenger(passanger);
+        this.refreshDimensions();
+    }
+
+    @Override
+    protected void removePassenger(Entity passanger) {
+        super.removePassenger(passanger);
+        this.refreshDimensions();
+    }
+
+    @Override
+    public EntityDimensions getDimensions(Pose p_19975_) {
+        var self_dim = super.getDimensions(p_19975_);
+        if (this.isVehicle() && !this.getPassengers().isEmpty())
+            self_dim = computeRidingDimension(self_dim);
+        return self_dim;
+    }
+
+    @Override
+    public double getPassengersRidingOffset() {
+        return (double)this.getRealDimensions().height * 0.75D;
+    }
+
+    public EntityDimensions getRealDimensions() {
+        return super.getDimensions(getPose());
+    }
+
+    private EntityDimensions computeRidingDimension(EntityDimensions self_dim) {
+        float total_width = self_dim.width;
+        float total_height = (float) this.getPassengersRidingOffset();
+        
+        var passenger = this.getPassengers().get(0);
+        total_width = Math.max(total_width, passenger.getBbWidth());
+        total_height += passenger.getBbHeight() + passenger.getMyRidingOffset();
+        
+        return new EntityDimensions(total_width, total_height, self_dim.fixed);
     }
 
     @Override
@@ -561,14 +661,35 @@ public class Dog extends AbstractDog {
         if (this.level().isClientSide) {
             proccessCustomModelSkin();
         }
+
+        if (this.level().isClientSide && this.isOnFire() 
+            && ConfigHandler.CLIENT.DISPLAY_SMOKE_WHEN_ON_FIRE.get()) {
+            if (this.getRandom().nextInt(3) == 0) {
+                float f1 = (this.getRandom().nextFloat() * 2.0F - 1.0F) * this.getBbWidth() * 0.5F;
+                float f2 = (this.getRandom().nextFloat() * 2.0F - 1.0F) * this.getBbWidth() * 0.5F;
+                this.level().addParticle(ParticleTypes.CAMPFIRE_COSY_SMOKE,
+                this.getX() + f1,
+                this.getY() + this.getEyeHeight(),
+                this.getZ() + f2,
+                0, 0.05 , 0 );
+            }
+        }
     }
 
     public boolean canDoIdileAnim() {
-        return this.isAlive() && !this.isShaking && !this.animationManager.started();
+        if (!this.isAlive())
+            return false;
+        if (this.isOnFire())
+            return false;
+        if (this.isPassenger() || this.isVehicle())
+            return false;
+        return !this.isShaking && !this.animationManager.started();
     }
 
     public boolean canContinueDoIdileAnim() {
-        return this.isAlive() && !this.isShaking;
+        if (this.isPassenger() || this.isVehicle())
+            return false;
+        return this.isAlive() && !this.isShaking && !this.isOnFire();
     }
 
     public boolean canUpdateClassicalAnim() {
@@ -693,6 +814,9 @@ public class Dog extends AbstractDog {
 
             // If the dog has a food bowl in this dimension then check if it is still there
             // Only check if the chunk it is in is loaded
+            if (bowlPos.isPresent() && this.distanceToSqr(Vec3.atBottomCenterOf(bowlPos.get())) >= 64) {
+                this.setBowlPos(dimKey, Optional.empty());
+            }
             if (bowlPos.isPresent() && this.level().hasChunkAt(bowlPos.get()) && !this.level().getBlockState(bowlPos.get()).is(DoggyBlocks.FOOD_BOWL.get())) {
                 this.setBowlPos(dimKey, Optional.empty());
             }
@@ -705,6 +829,19 @@ public class Dog extends AbstractDog {
 
         if (this.tickChopinTail > 0) {
             --this.tickChopinTail;
+        }
+
+        if (!this.level().isClientSide && this.getMode().canWander()) {
+            if (!this.getMode().shouldAttack())
+                updateWanderRestState();
+            boolean invalidated = invalidateWanderCenter(25*25);
+            if (invalidated) {
+                this.restrictTo(this.blockPosition(), 12);
+            }
+        }
+
+        if (!this.level().isClientSide && this.isInSittingPose() && !this.resting() && this.tickUntilRest > 0 ) {
+            --this.tickUntilRest;
         }
     }
 
@@ -757,16 +894,30 @@ public class Dog extends AbstractDog {
     }
 
     public boolean isBusy() {
-        if (!this.isDoingFine()) return false;
+        if (!this.isDoingFine()) return true;
         if (this.isInSittingPose() && this.forceSit()) return true;
-        return this.activeAction != null;
+        if (this.activeAction != null) return true;
+        for (var x : this.trivialBlocking) {
+            if (x.isRunning())
+                return true;
+        }
+        if (this.hasControllingPassenger())
+            return true;
+        return false;
     }
 
     public boolean readyForNonTrivialAction() {
         if (!this.isDoingFine()) return false;
         if (this.isInSittingPose() && this.forceSit()) return false;
-        if (this.activeAction == null) return true;
-        return this.activeAction.isTrivial();
+        if (this.activeAction != null && !this.activeAction.isTrivial())
+            return false;
+        for (var x : this.nonTrivialBlocking) {
+            if (x.isRunning())
+                return false;
+        }
+        if (this.hasControllingPassenger())
+            return false;
+        return true;
     }
 
     public TriggerableAction getStashedTriggerableAction() {
@@ -864,6 +1015,9 @@ public class Dog extends AbstractDog {
             } 
         }
 
+        if (dogCheckAndRidePlayer(player, stack).shouldSwing())
+            return InteractionResult.SUCCESS;
+
         Optional<IDogFoodHandler> foodHandler = FoodHandler.getMatch(this, stack, player);
 
         if (foodHandler.isPresent()) {
@@ -881,6 +1035,10 @@ public class Dog extends AbstractDog {
             if (result != InteractionResult.PASS) {
                 return result;
             }
+        }
+
+        if (handleBreeding(player, hand, stack).shouldSwing()) {
+            return InteractionResult.SUCCESS;
         }
 
         InteractionResult actionresulttype = super.mobInteract(player, hand);
@@ -908,13 +1066,59 @@ public class Dog extends AbstractDog {
         return actionresulttype;
     }
 
+    public InteractionResult dogCheckAndRidePlayer(Player player, ItemStack stack) {
+        if (player.hasPassenger(this)) {
+            if (!this.level().isClientSide)
+                this.unRide();
+            return InteractionResult.SUCCESS;
+        }
+        if (stack.getItem() != Items.BONE)
+            return InteractionResult.PASS;
+        if (!player.isShiftKeyDown())
+            return InteractionResult.PASS;
+        if (this.isVehicle())
+            return InteractionResult.PASS;
+        if (!this.canInteract(player))
+            return InteractionResult.PASS;
+        if (!this.level().isClientSide) {
+            if (this.startRiding(player))
+            player.displayClientMessage(
+                Component.translatable(
+                    "talent.doggytalents.bed_finder.dog_mount", 
+                    this.getGenderPronoun()), true);
+        }
+        return InteractionResult.SUCCESS;
+    }
+
+    private InteractionResult handleBreeding(Player player, InteractionHand hand, ItemStack stack) {
+        if (!stack.is(DoggyTags.BREEDING_ITEMS))
+            return InteractionResult.PASS;
+        if (!canInteract(player))
+            return InteractionResult.PASS;
+        
+
+        if (this.level().isClientSide)
+            return InteractionResult.SUCCESS;
+
+        int age = this.getAge();
+        if (age == 0 && this.canFallInLove()) {
+            this.usePlayerItem(player, hand, stack);
+            this.setInLove(player);
+        } else if (this.isBaby()) {
+            this.usePlayerItem(player, hand, stack);
+            this.ageUp(getSpeedUpSecondsWhenFeeding(-age), true);
+        }
+        return InteractionResult.SUCCESS;
+    }
+
     @Override
     public boolean canStillEat() {
         if (this.level().isClientSide)
             return false;
         if (ConfigHandler.SERVER.DISABLE_HUNGER.get()) {
-            return this.getHealth() < this.getMaxHealth()
-                && this.hungerSaturation <= 0;
+            if(this.getHealth() < this.getMaxHealth()
+                && this.hungerSaturation <= 0)
+                return true;
         }
         
         return this.getDogHunger() < this.getMaxHunger();
@@ -936,7 +1140,7 @@ public class Dog extends AbstractDog {
     private void displayToastIfNoPermission(Player player) {
         if (this.canInteract(player)) return;
         player.displayClientMessage(
-            Component.translatable("doggui.invalid_dog.no_permission.title")
+            Component.translatable("doggui.invalid_dog.no_permission.title", this.getName().getString())
             .withStyle(ChatFormatting.RED) 
         , true);
     }
@@ -972,17 +1176,40 @@ public class Dog extends AbstractDog {
         }
         
     }
+    private boolean ridingAuthorized = false;
 
     @Override
     public boolean startRiding(Entity entity) {
-        if (!this.level().isClientSide) {
+        var result = false;
+        boolean not_authorized = 
+            requireRidingAuthorization(entity)
+            && !isRidingAuthorized();
+        if (!not_authorized) {   
+            result = super.startRiding(entity);
+        }
+        ridingAuthorized = false;
+
+        if (!this.level().isClientSide && result) {
             if (entity instanceof ServerPlayer player) {
                 PacketHandler.send(PacketDistributor.PLAYER.with(() -> player), 
                     new DogMountData(this.getId(), true)
                 );
             }
         }
-        return super.startRiding(entity);
+        return result;
+    }
+
+    public boolean isRidingAuthorized() {
+        return this.ridingAuthorized;
+    }
+
+    public void authorizeRiding() {
+        this.ridingAuthorized = true;
+    }
+
+    public boolean requireRidingAuthorization(Entity entity) {
+        return entity instanceof AbstractMinecart
+            || entity instanceof Boat;
     }
 
     @Override
@@ -1078,8 +1305,6 @@ public class Dog extends AbstractDog {
 
             if (result.shouldSwing()) {
                 return true;
-            } else if (result == InteractionResult.FAIL) {
-                return false;
             }
         }
 
@@ -1098,6 +1323,31 @@ public class Dog extends AbstractDog {
 
         return super.decreaseAirSupply(air);
     }
+
+    @Override
+    public boolean canStandOnFluid(FluidState state) {
+        for (var alter : this.alterations) {
+            var result = alter.canStandOnFluid(this, state);
+
+            if (result.shouldSwing()) {
+                return true;
+            }
+        }
+
+        return super.canStandOnFluid(state);
+    }
+
+    @Override
+    public boolean ignoreExplosion() {
+        for (var alter : this.alterations) {
+            var result = alter.negateExplosion(this);
+            if (result.shouldSwing()) {
+                return true;
+            }
+        }
+        return super.ignoreExplosion();
+    }
+
 
     @Override
     protected int increaseAirSupply(int currentAir) {
@@ -1276,7 +1526,13 @@ public class Dog extends AbstractDog {
             amount = (amount + 1.0F) / 2.0F;
         }
 
-        return super.hurt(source, amount);
+        boolean ret = super.hurt(source, amount);
+        if (this.level().isClientSide
+            && ConfigHandler.CLIENT.BLOCK_RED_OVERLAY_WHEN_HURT.get()) {
+            this.hurtTime = 0;
+            this.hurtDuration = 0;
+        }
+        return ret;
     }
 
     public boolean checkIfAttackedFromOwnerOrTeam(LivingEntity owner, Entity attacker) {
@@ -1469,7 +1725,7 @@ public class Dog extends AbstractDog {
 
     @Override
     public boolean canBeLeashed(Player player) {
-        return this.canInteract(player) && super.canBeLeashed(player);
+        return false;
     }
 
     @Override
@@ -1523,13 +1779,17 @@ public class Dog extends AbstractDog {
         super.setTame(tamed);
         if (tamed) {
            this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(20.0D);
-           this.setHealth(20.0F);
+           this.maxHealth();
         } else {
            this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(8.0D);
         }
 
         this.getAttribute(Attributes.ATTACK_DAMAGE).setBaseValue(4.0D);
      }
+
+    public void maxHealth() {
+        this.setHealth(this.getMaxHealth());
+    }
 
     @Override
     public void setOwnerUUID(@Nullable UUID uuid) {
@@ -1575,7 +1835,8 @@ public class Dog extends AbstractDog {
 
     @Override
     public boolean isFood(ItemStack stack) {
-        return stack.is(DoggyTags.BREEDING_ITEMS);
+        //Only authorized breeding!
+        return false;
     }
 
     @Override
@@ -1697,15 +1958,15 @@ public class Dog extends AbstractDog {
 
     @Override
     public void remove(Entity.RemovalReason removalReason) {
-        super.remove(removalReason);
-
-        if (removalReason == RemovalReason.DISCARDED || removalReason == RemovalReason.KILLED) {
+        if (removalReason.shouldDestroy()) {
             if (this.level() != null && !this.level().isClientSide) {                
                 DogLocationStorage.get(this.level()).remove(this);
                 if (this.getOwnerUUID() != null)
                     DogRespawnStorage.get(this.level()).putData(this);
             }
         }
+        
+        super.remove(removalReason);
     }
     
     private void startShaking() {
@@ -1751,6 +2012,11 @@ public class Dog extends AbstractDog {
 
     public boolean isShakingLava() {
         return this.isShaking && this.shakeFire;
+    }
+
+    public void resetBeggingRotation() {
+        this.headRotationCourse = 0;
+        this.headRotationCourseOld = 0;
     }
 
     @Override
@@ -1906,13 +2172,14 @@ public class Dog extends AbstractDog {
             NBTUtil.putTextComponent(compound, "lastKnownOwnerName", comp);
         });
 
-        compound.putString("customSkinHash", this.getSkinHash());
+        this.getSkinData().save(compound);
         compound.putBoolean("willObey", this.willObeyOthers());
         compound.putBoolean("friendlyFire", this.canOwnerAttack());
         compound.putBoolean("regardTeamPlayers", this.regardTeamPlayers());
         compound.putBoolean("forceSit", this.forceSit());
         compound.putByte("lowHealthStrategy", this.getLowHealthStrategy().getId());
         compound.putBoolean("crossOriginTp", this.crossOriginTp());
+        compound.putBoolean("patrolTargetLock", this.patrolTargetLock());
         compound.putInt("dogSize", this.getDogSize().getId());
         compound.putInt("level_normal", this.getDogLevel().getLevel(Type.NORMAL));
         compound.putInt("level_dire", this.getDogLevel().getLevel(Type.DIRE));
@@ -1956,6 +2223,19 @@ public class Dog extends AbstractDog {
         this.dogGroupsManager.save(compound);
         if (this.isDefeated()) 
             this.incapacitatedMananger.save(compound);
+
+        if (this.getMode().canWander() && this.hasRestriction()) {
+            var restrict = this.getRestrictCenter();
+            int restrict_r = (int) this.getRestrictRadius();
+            if (restrict != null) {
+                var wanderTg = new CompoundTag();
+                wanderTg.putInt("wanderX", restrict.getX());
+                wanderTg.putInt("wanderY", restrict.getY());
+                wanderTg.putInt("wanderZ", restrict.getZ());
+                wanderTg.putInt("wanderR", restrict_r);
+                compound.put("dogWanderCenter", wanderTg);
+            }
+        }
 
         //Never save these entry, these will be loaded by the talents itself.
         compound.remove("HandItems");
@@ -2117,11 +2397,8 @@ public class Dog extends AbstractDog {
                 BackwardsComp.readMode(compound, this::setMode);
             }
 
-            if (compound.contains("customSkinHash", Tag.TAG_STRING)) {
-                this.setSkinHash(compound.getString("customSkinHash"));
-            } else {
-                BackwardsComp.readDogTexture(compound, this::setSkinHash);
-            }
+            var dogSkinData = DogSkinData.readFromTag(compound);
+            this.setDogSkinData(dogSkinData);
 
             if (compound.contains("fetchItem", Tag.TAG_COMPOUND)) {
                 this.setBoneVariant(NBTUtil.readItemStack(compound, "fetchItem"));
@@ -2135,7 +2412,8 @@ public class Dog extends AbstractDog {
             this.setCanPlayersAttack(compound.getBoolean("friendlyFire"));
             this.setRegardTeamPlayers(compound.getBoolean("regardTeamPlayers"));
             this.setForceSit(compound.getBoolean("forceSit"));
-            this.setCrossOriginTp(compound.getBoolean("crossOriginTp")); 
+            this.setCrossOriginTp(compound.getBoolean("crossOriginTp"));
+            this.setPatrolTargetLock(compound.getBoolean("patrolTargetLock")); 
             var low_health_strategy_id = compound.getByte("lowHealthStrategy");
             this.setLowHealthStrategy(LowHealthStrategy.fromId(low_health_strategy_id));
             if (compound.contains("dogSize", Tag.TAG_ANY_NUMERIC)) {
@@ -2159,7 +2437,7 @@ public class Dog extends AbstractDog {
             this.entityData.set(DOG_LEVEL.get(), new DogLevel(level_normal, level_dire));
             float h = this.getDogLevel().getMaxHealth();
             this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(h);
-            this.setHealth(h);
+            this.maxHealth();
         } catch (Exception e) {
             DoggyTalentsNext.LOGGER.error("Failed to load levels: " + e.getMessage());
             e.printStackTrace();
@@ -2240,6 +2518,23 @@ public class Dog extends AbstractDog {
 
         }
 
+        try {
+            if (this.getMode().canWander() 
+                && compound.contains("dogWanderCenter", Tag.TAG_COMPOUND)) {
+                var wanderTg = compound.getCompound("dogWanderCenter");
+                var restrictPos = new BlockPos(
+                    wanderTg.getInt("wanderX"),
+                    wanderTg.getInt("wanderY"),
+                    wanderTg.getInt("wanderZ")
+                );
+                int restrict_r = wanderTg.getInt("wanderR");
+                restrict_r = Math.max(0, restrict_r);
+                this.restrictTo(restrictPos, restrict_r);
+            }
+        } catch (Exception e) {
+            
+        }
+
     }
 
     @Override
@@ -2273,12 +2568,11 @@ public class Dog extends AbstractDog {
             this.refreshDimensions();
         }
 
-        if (this.level().isClientSide && CUSTOM_SKIN.equals(key)) {
+        if (this.level().isClientSide && CUSTOM_SKIN.get().equals(key)) {
             this.setClientSkin(
                 DogTextureManager.INSTANCE
-                    .getLocFromHashOrGet(
-                        this.entityData.get(CUSTOM_SKIN), 
-                        DogTextureManager.INSTANCE::getCached));
+                    .getDogSkin(
+                        this.getSkinData().getHash()));
         }
 
         if (ANIMATION.equals(key)) {
@@ -2291,7 +2585,66 @@ public class Dog extends AbstractDog {
             if (mode == EnumMode.INCAPACITATED) {
                 this.removeAttributeModifier(Attributes.MOVEMENT_SPEED, HUNGER_MOVEMENT);
             }
+            updateWanderState(mode);
         }
+    }
+
+    private void updateWanderState(EnumMode mode) {
+        if (!mode.canWander()) {
+            this.clearRestriction();
+            return;
+        }
+        this.resetWanderRestTime();
+        var restrictPos = this.blockPosition();
+        int restrictRadius = 12;
+        var bowlPosOptional = this.getBowlPos();
+        if (bowlPosOptional.isPresent()) {
+            var bowlPos = bowlPosOptional.get();
+            if (bowlPos.distSqr(this.blockPosition()) < 64) {
+                restrictRadius = 5;
+                restrictPos = bowlPos;
+            }
+        }
+        this.restrictTo(restrictPos, restrictRadius);
+    }
+
+    private boolean invalidateWanderCenter(int distanceSqr) {
+        if (!this.hasRestriction())
+            return false;
+        var restrict_pos = this.getRestrictCenter();
+        if (restrict_pos == null)
+            return false;
+        if (restrict_pos.distSqr(this.blockPosition()) >= distanceSqr) {
+            this.clearRestriction();
+            return true;
+        }
+        return false;
+    }
+
+    private void updateWanderRestState() {
+        if (this.wanderRestTime > 0) {
+            --this.wanderRestTime;
+            if (this.wanderRestTime <= 0) {
+                resetWanderRestTime();
+            }
+            return;
+        }
+        if (this.wanderCooldown > 0) {
+            --this.wanderCooldown;
+            return;
+        }
+        if (this.tickCount % 2 == 0 && this.getRandom().nextFloat() < 0.02f) {
+            this.wanderRestTime = 15*20 + this.getRandom().nextInt(16) * 20;
+        }
+    }
+
+    public boolean isWanderResting() {
+        return this.wanderRestTime > 0;
+    }
+
+    private void resetWanderRestTime() {
+        this.wanderCooldown = 15*20 + this.getRandom().nextInt(46) * 20;
+        this.wanderRestTime = 0;
     }
 
     public void recalculateAlterations() {
@@ -2539,18 +2892,18 @@ public class Dog extends AbstractDog {
     }
 
     public boolean hasCustomSkin() {
-        return !Strings.isNullOrEmpty(this.getSkinHash());
+        return !Strings.isNullOrEmpty(this.getSkinData().getHash());
     }
 
-    public String getSkinHash() {
-        return this.entityData.get(CUSTOM_SKIN);
+    public DogSkinData getSkinData () {
+        return this.entityData.get(CUSTOM_SKIN.get());
     }
 
-    public void setSkinHash(String hash) {
-        if (hash == null) {
-            hash = "";
+    public void setDogSkinData(DogSkinData data) {
+        if (data == null) {
+            data = DogSkinData.NULL;
         }
-        this.entityData.set(CUSTOM_SKIN, hash);
+        this.entityData.set(CUSTOM_SKIN.get(), data);
     }
 
     @Override
@@ -2617,8 +2970,8 @@ public class Dog extends AbstractDog {
     }
 
     private void setDogFlag(int bits, boolean flag) {
-        byte c = this.entityData.get(DOG_FLAGS);
-        this.entityData.set(DOG_FLAGS, (byte)(flag ? c | bits : c & ~bits));
+        int c = this.entityData.get(DOG_FLAGS);
+        this.entityData.set(DOG_FLAGS, (flag ? c | bits : c & ~bits));
     }
 
     public void setBegging(boolean begging) {
@@ -2681,6 +3034,30 @@ public class Dog extends AbstractDog {
 
     public void setCrossOriginTp(boolean val) {
         this.setDogFlag(64, val);
+    }
+
+    public boolean resting() {
+        return this.getDogFlag(256);
+    }
+
+    public void setResting(boolean val) {
+        this.setDogFlag(256, val);
+    }
+
+    public boolean patrolTargetLock() {
+        return this.getDogFlag(512);
+    }
+
+    public void setPatrolTargetLock(boolean val) {
+        this.setDogFlag(512, val);
+    }
+
+    public boolean wantsToRest() {
+        return this.tickUntilRest <= 0 && this.getRandom().nextFloat() < 0.02f;
+    }
+
+    public void resetTickTillRest() {
+        this.tickUntilRest = 30 * 20 + this.getRandom().nextInt(271) * 20; 
     }
 
     public List<TalentInstance> getTalentMap() {
@@ -2916,8 +3293,30 @@ public class Dog extends AbstractDog {
 
     @Override
     public LivingEntity getControllingPassenger() {
-        // Gets the first passenger which is the controlling passenger
-        return this.getPassengers().isEmpty() ? null : (LivingEntity) this.getPassengers().get(0);
+        var passengers = this.getPassengers();
+        if (passengers.isEmpty())
+            return null;
+        var first_passenger = passengers.get(0);
+        if (!(first_passenger instanceof Player player))
+            return null;
+        return this.canInteract(player) ? player : null;
+    }
+
+    @Override
+    public Vec3 getDismountLocationForPassenger(LivingEntity passenger) {
+        var a1 = this.getYRot();
+        var dx1 = -Mth.sin(a1*Mth.DEG_TO_RAD);
+        var dz1 = Mth.cos(a1*Mth.DEG_TO_RAD);
+        
+        var newX = this.getX() + dx1;
+        var newZ = this.getZ() + dz1;
+        var newPos = new Vec3(newX, this.getY() + 0.5, newZ);
+        var b0 = BlockPos.containing(newPos);
+        var type = WalkNodeEvaluator.getBlockPathTypeStatic(this.level(), b0.mutable());
+        if (type == BlockPathTypes.WALKABLE) {
+            return newPos;
+        }
+        return super.getDismountLocationForPassenger(passenger);
     }
 
     // @Override
@@ -2929,12 +3328,16 @@ public class Dog extends AbstractDog {
     //TODO
     @Override
     public boolean isPickable() {
+        if (this.level().isClientSide) {
+            if (ClientEventHandler.shouldClientBlockPick(this))
+                return false;
+        }
         return super.isPickable();
     }
 
     @Override
     public boolean isPushable() {
-        return !this.isVehicle() && super.isPushable();
+        return !(this.isVehicle() && this.hasControllingPassenger()) && super.isPushable();
     }
 
     // @Override
@@ -3118,6 +3521,11 @@ public class Dog extends AbstractDog {
         this.addMovementStat(this.getX() - this.xo, this.getY() - this.yo, this.getZ() - this.zo);
     }
 
+    @Override
+    protected BodyRotationControl createBodyControl() {
+        return new DogBodyRotationControl(this);
+    }
+
     private void checkAndJumpWhenBeingRidden(LivingEntity rider) {
         float forward = rider.zza;
 
@@ -3279,7 +3687,8 @@ public class Dog extends AbstractDog {
 
     @Override
     public void setInSittingPose(boolean sit) {
-        if (!this.level().isClientSide) {
+        if (!this.level().isClientSide
+            && !(this.animAction != null && this.animAction.blockSitStandAnim())) {
             boolean sit0 = this.isInSittingPose();
             if (sit0 != sit) {
                 var anim = sit ? this.getSitAnim() : this.getStandAnim();
@@ -3371,6 +3780,7 @@ public class Dog extends AbstractDog {
         return this.getHealth() < 6;
     }
 
+    @Override
     public void setDogSwimming(boolean s) {
         this.isDogSwimming = s;
     }
@@ -3463,39 +3873,101 @@ public class Dog extends AbstractDog {
 
     @Override
     protected void doPush(Entity pushTarget) {
-        boolean pushEachOther = 
+        if (shouldBlockPush(pushTarget))
+            return;
+        if (pushTarget.getVehicle() == this
+            || this.getVehicle() == pushTarget) {
+            return;        
+        }
+        if (this.isVehicle() && !this.hasControllingPassenger())
+            Entity_push(pushTarget);
+        else
+            super.doPush(pushTarget);
+    }
+
+    protected boolean shouldBlockPush(Entity target) {
+        boolean avoidPush = 
             ConfigHandler.ServerConfig.getConfig(ConfigHandler.SERVER.PREVENT_DOGS_PUSHING_EACH_OTHER);
-        if (
-            pushEachOther
-            && pushTarget instanceof Dog dog
-            && !dog.getNavigation().isDone()
-            && !dog.onGround()
-        )
+        if (!avoidPush)
+            return false;
+        if (!(target instanceof Dog otherDog)) {
+            return false;
+        }
+        boolean oneDogStillNotOnGround =
+            !this.onGround()
+            || !otherDog.onGround();
+        return oneDogStillNotOnGround;
+    }
+
+    @Override
+    public void push(Entity source) {
+        if (source.getVehicle() == this
+            || this.getVehicle() == source)
             return;
-        if (
-            pushEachOther
-            && pushTarget instanceof Player player
-            && !player.isShiftKeyDown()
-            && this.isDoingFine()
-        )
+        if (this.isVehicle() && !this.hasControllingPassenger())
+            Entity_push(source);
+        else
+            super.push(source);
+    }
+
+    private void Entity_push(Entity source) {
+        if (this.isPassengerOfSameVehicle(source)) 
             return;
-        super.doPush(pushTarget);
+        if (source.noPhysics || this.noPhysics)
+            return;
+        double dx_vec = source.getX() - this.getX();
+        double dz_vec = source.getZ() - this.getZ();
+        double max_magnitude = Mth.absMax(dx_vec, dz_vec);
+        if (max_magnitude < 0.01)
+            return;
+
+        max_magnitude = Math.sqrt(max_magnitude);
+        dx_vec /= max_magnitude;
+        dz_vec /= max_magnitude;
+        double max_magnitude_inv = 1.0D / max_magnitude;
+        if (max_magnitude_inv > 1.0D) {
+            max_magnitude_inv = 1.0D;
+        }
+
+        dx_vec *= max_magnitude_inv;
+        dz_vec *= max_magnitude_inv;
+        dx_vec *= 0.05;
+        dz_vec *= 0.05;
+        if (this.isPushable()) {
+            this.push(-dx_vec, 0.0D, -dz_vec);
+        }
+
+        if (source.isPushable()) {
+            source.push(dx_vec, 0.0D, dz_vec);
+        }
     }
 
     @Override
     public boolean canCollideWith(Entity otherEntity) {
-        //TODO should this be dog of the same team ?
-        boolean pushEachOther = ConfigHandler.ServerConfig.getConfig(ConfigHandler.SERVER.PREVENT_DOGS_PUSHING_EACH_OTHER);
-        if (
-            pushEachOther
-            && otherEntity instanceof Dog dog
-            && !dog.getNavigation().isDone()
-            && !dog.onGround()
-        ) {
+        if (shouldBlockPush(otherEntity)) {
             return false;
         }
-            
+
+        if (otherEntity.getVehicle() == this
+            || this.getVehicle() == otherEntity)
+            return false;
         return super.canCollideWith(otherEntity);
+    }
+
+    public BlockPathTypes getBlockPathTypeViaAlterations(BlockPos pos) {
+        var blockType = WalkNodeEvaluator.getBlockPathTypeStatic(
+            this.level(), 
+            pos.mutable()
+        );
+
+        for (var alt : this.alterations) {
+            var result = alt.inferType(this, blockType);
+            if (result.getResult().shouldSwing()) {
+                blockType = result.getObject();
+                break;
+            }
+        }
+        return blockType;
     }
 
     public float getTimeDogIsShaking() {
@@ -3544,6 +4016,7 @@ public class Dog extends AbstractDog {
             this.animAction.onStart();
             if (this.animAction.blockMove()) {
                 this.goalSelector.setControlFlag(Goal.Flag.MOVE, false);
+                this.getNavigation().stop();
             }
         }
     }
@@ -3577,17 +4050,14 @@ public class Dog extends AbstractDog {
             return;
         }
         if (this.isInSittingPose()) {
+            if (this.resting()) {
+                this.setDogPose(DogPose.REST);
+                return;
+            }
             this.setDogPose(this.isLying() ? DogPose.LYING_2 : DogPose.SIT);
             return;
         }
         this.setDogPose(DogPose.STAND);
-    }
-
-    public boolean showDrownPose() {
-        var type = this.getMaxHeightFluidType();
-        if (type.isAir()) return false;
-        double height = this.getFluidTypeHeight(type);
-        return height > 0.5;
     }
 
     //Client
