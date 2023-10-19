@@ -194,16 +194,6 @@ public class DogModel extends EntityModel<Dog> {
     }
 
     public void setUpStandPose(Dog dog, float limbSwing, float limbSwingAmount, float partialTickTime) {
-
-        this.body.resetPose();
-        this.mane.resetPose();
-        this.tail.resetPose();
-        this.legBackRight.resetPose();
-        this.legBackLeft.resetPose();
-        this.legFrontRight.resetPose();
-        this.legFrontLeft.resetPose();
-        this.head.resetPose();
-
         animateStandWalking(dog, limbSwing, limbSwingAmount, partialTickTime);
     }
 
