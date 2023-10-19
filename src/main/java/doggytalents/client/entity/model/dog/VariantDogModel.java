@@ -135,13 +135,6 @@ public class VariantDogModel extends DogModel {
     }
 
     @Override
-    public void resetShakingDog(Dog dog, float limbSwing, float limbSwingAmount, float partialTickTime) {
-        super.resetShakingDog(dog, limbSwing, limbSwingAmount, partialTickTime);
-        this.realTail2.zRot = 0;
-        this.realTail3.zRot = 0;
-    }
-
-    @Override
     public void resetAllPose() {
         super.resetAllPose();
         this.realTail2.resetPose();

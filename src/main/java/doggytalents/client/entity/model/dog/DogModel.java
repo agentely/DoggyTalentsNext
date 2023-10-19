@@ -3,15 +3,12 @@ package doggytalents.client.entity.model.dog;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.stream.Collectors;
+
+import javax.annotation.Nullable;
 
 import com.google.common.collect.ImmutableList;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.math.Vector3f;
-
-import doggytalents.api.enu.forward_imitate.anim.DogModelPart;
-import doggytalents.api.enu.forward_imitate.anim.KeyframeAnimations;
 import doggytalents.DoggyAccessoryTypes;
 import doggytalents.api.inferface.AbstractDog;
 import doggytalents.api.registry.Accessory;
@@ -20,7 +17,6 @@ import doggytalents.client.entity.model.animation.DogAnimationRegistry;
 import doggytalents.client.entity.model.animation.KeyframeAnimationsDelegate;
 import doggytalents.common.entity.Dog;
 import doggytalents.common.entity.anim.DogAnimation;
-import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
 import net.minecraft.client.model.AgeableListModel;
 import net.minecraft.client.model.ColorableAgeableListModel;
 import net.minecraft.client.model.EntityModel;
@@ -29,8 +25,15 @@ import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.geom.builders.*;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.core.Direction.Axis;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import doggytalents.api.enu.forward_imitate.anim.AnimationDefinition;
+import doggytalents.api.enu.forward_imitate.anim.DogModelPart;
+import doggytalents.api.enu.forward_imitate.anim.Keyframe;
+import doggytalents.api.enu.forward_imitate.anim.KeyframeAnimations;
+import doggytalents.api.enu.forward_imitate.anim.AnimationChannel;
+import com.mojang.math.Vector3f;
 
 public class DogModel extends EntityModel<Dog> {
 
@@ -39,6 +42,37 @@ public class DogModel extends EntityModel<Dog> {
     public static final float[] TAIL_LYING_OFF = {0, 6f, 0};
     public static final float[] TAIL_SITTING_OFF = {0, 9f, -2f};
 
+    public static class PivotPoint {
+        private float x;
+        private float y;
+        private float z;
+    
+        public PivotPoint(float x, float y, float z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+    
+        public float getX() {
+            return x;
+        }
+    
+        public float getY() {
+            return y;
+        }
+    
+        public float getZ() {
+            return z;
+        }
+    }
+    
+    public static final PivotPoint DEFAULT_ROOT_PIVOT = new PivotPoint(0.0f, 15.0f, 0.0f);
+    
+    Vector3f vector3f = new Vector3f(DEFAULT_ROOT_PIVOT.getX(), DEFAULT_ROOT_PIVOT.getY(), DEFAULT_ROOT_PIVOT.getZ());
+    
+
+     
+    
     public DogModelPart head;
     public DogModelPart realHead;
     public DogModelPart body;
@@ -147,20 +181,13 @@ public class DogModel extends EntityModel<Dog> {
     @Override
     public void prepareMobModel(Dog dog, float limbSwing, float limbSwingAmount, float partialTickTime) {
 
-        this.earLeft.ifPresent(ear -> ear.resetPose());
-        this.earRight.ifPresent(ear -> ear.resetPose());
+        this.resetAllPose();
 
         var pose = dog.getDogPose();
 
         var anim = dog.getAnim();
         if (anim != DogAnimation.NONE) return;
-    
-        if (!pose.canShake)
-        this.resetShakingDog(dog, limbSwing, limbSwingAmount, partialTickTime);
-
-        if (!pose.canBeg)
-        this.resetBeggingDog(dog, limbSwing, limbSwingAmount, partialTickTime);
-
+        
         switch (pose) {
             case FAINTED:
                 this.setupFaintPose(dog, limbSwing, limbSwingAmount, partialTickTime);
@@ -172,8 +199,7 @@ public class DogModel extends EntityModel<Dog> {
                 this.setUpSitPose(dog, limbSwing, limbSwingAmount, partialTickTime);
                 break;
             case LYING:
-                //Reserved.
-                this.setupLyingPose2(dog, limbSwing, limbSwingAmount, partialTickTime);
+                this.setupRestPose(dog, limbSwing, limbSwingAmount, partialTickTime);
                 break;
             case LYING_2:
                 this.setupLyingPose2(dog, limbSwing, limbSwingAmount, partialTickTime);
@@ -215,20 +241,20 @@ public class DogModel extends EntityModel<Dog> {
         this.tail.z += getAnimateWalkingValue(w, swing, -0.5f*modifier);
 
         if (this.earRight.isPresent()) {
-            this.earRight.get().xRot = getAnimateWalkingValue(w, swing, -40f*Mth.DEG_TO_RAD );
-            this.earRight.get().zRot = getAnimateWalkingValue(w, swing, -27.5f*Mth.DEG_TO_RAD );
+            this.earRight.get().xRot += getAnimateWalkingValue(w, swing, -40f*Mth.DEG_TO_RAD );
+            this.earRight.get().zRot += getAnimateWalkingValue(w, swing, -27.5f*Mth.DEG_TO_RAD );
             this.earRight.get().y += getAnimateWalkingValue(w, swing, 0.5f );
         }
         if (this.earLeft.isPresent()) {
-            this.earLeft.get().xRot = getAnimateWalkingValue(w, swing, -40f*Mth.DEG_TO_RAD );
-            this.earLeft.get().zRot = getAnimateWalkingValue(w, swing, 27.5f*Mth.DEG_TO_RAD );
+            this.earLeft.get().xRot += getAnimateWalkingValue(w, swing, -40f*Mth.DEG_TO_RAD );
+            this.earLeft.get().zRot += getAnimateWalkingValue(w, swing, 27.5f*Mth.DEG_TO_RAD );
             this.earLeft.get().y += getAnimateWalkingValue(w, swing, 0.5f );
         }
 
-        this.legBackRight.xRot = w * 1.4F * limbSwingAmount;
-        this.legBackLeft.xRot = w1 * 1.4F * limbSwingAmount;
-        this.legFrontRight.xRot = w1 * 1.4F * limbSwingAmount;
-        this.legFrontLeft.xRot = w * 1.4F * limbSwingAmount;
+        this.legBackRight.xRot += w * 1.4F * limbSwingAmount;
+        this.legBackLeft.xRot += w1 * 1.4F * limbSwingAmount;
+        this.legFrontRight.xRot += w1 * 1.4F * limbSwingAmount;
+        this.legFrontLeft.xRot += w * 1.4F * limbSwingAmount;
     }
 
     private float getAnimateWalkingValue(float w, float swingAmount, float amplitude) {
@@ -238,12 +264,11 @@ public class DogModel extends EntityModel<Dog> {
     }
 
     public void setUpSitPose(Dog dog, float limbSwing, float limbSwingAmount, float partialTickTime) {
-        this.resetAllPose();
         this.tail.offsetPos(KeyframeAnimations.posVec(0f, -9f, -2f));
         this.legFrontLeft.offsetRotation(KeyframeAnimations.degreeVec(-27f, 0f, 0f));
-        this.legFrontLeft.offsetPos(KeyframeAnimations.posVec(0f, -1f, 0f));
+        this.legFrontLeft.offsetPos(KeyframeAnimations.posVec(0.01f, -1f, 0f));
         this.legFrontRight.offsetRotation(KeyframeAnimations.degreeVec(-27f, 0f, 0f));
-        this.legFrontRight.offsetPos(KeyframeAnimations.posVec(0f, -1f, 0f));
+        this.legFrontRight.offsetPos(KeyframeAnimations.posVec(0.01f, -1f, 0f));
         this.legBackLeft.offsetRotation(KeyframeAnimations.degreeVec(-90f, 0f, 0f));
         this.legBackLeft.offsetPos(KeyframeAnimations.posVec(0f, -6f, -5f));
         this.legBackRight.offsetRotation(KeyframeAnimations.degreeVec(-90f, 0f, 0f));
@@ -257,47 +282,31 @@ public class DogModel extends EntityModel<Dog> {
     }
 
     public void setupFaintPose(Dog dog, float limbSwing, float limbSwingAmount, float partialTickTime) {
-        this.head.zRot += 90 * Mth.DEG_TO_RAD;
-        this.head.x += 2;
-        this.head.y += 7;
-
-        this.body.zRot += 90 * Mth.DEG_TO_RAD;
-        this.body.x += 2;
-        this.body.y += 6.75;
-
-        this.legBackRight.zRot += 80 * Mth.DEG_TO_RAD;
-        this.legBackRight.x += 2;
-        this.legBackRight.y += 2.25;
-
-        this.legBackLeft.zRot += 90 * Mth.DEG_TO_RAD;
-        this.legBackLeft.x += -1;
-        this.legBackLeft.y += 5.75;
-
-        this.legFrontRight.zRot += 75 * Mth.DEG_TO_RAD;
-        this.legFrontRight.x += 2;
-        this.legFrontRight.y += 2;
-
-        this.legFrontLeft.zRot += 90 * Mth.DEG_TO_RAD;
-        this.legFrontLeft.x += -1;
-        this.legFrontLeft.y += 6;
-
-        this.tail.xRot = ((Dog) dog).getTailRotation() + 62.5f * Mth.DEG_TO_RAD;
-        this.tail.x += 3.75;
-        this.tail.y += 8.25;
-        this.tail.z += -0.5;
-        
-        this.mane.zRot += 90 * Mth.DEG_TO_RAD;
-        this.mane.x += 2.5;
-        this.mane.y += 5.5;
-
-        if (this.earLeft.isPresent()) {
-            this.earLeft.get().offsetRotation(KeyframeAnimations.degreeVec(0f, 0f, 40f));
-            this.earLeft.get().offsetPos(KeyframeAnimations.posVec(0f, -0.75f, 0f));
-        }
-
+        this.head.offsetRotation(KeyframeAnimations.degreeVec(6.2f, 4.97f, -2.04f));
+        this.head.offsetPos(KeyframeAnimations.posVec(0f, -1f, -0.5f));
+        this.body.offsetRotation(KeyframeAnimations.degreeVec(2.5f, 0f, 0f));
+        this.body.offsetPos(KeyframeAnimations.posVec(0f, -0.5f, 0f));
+        this.legBackRight.offsetRotation(KeyframeAnimations.degreeVec(0f, 0f, -22.5f));
+        this.legBackRight.offsetPos(KeyframeAnimations.posVec(0f, 0f, 0f));
+        this.legBackLeft.offsetRotation(KeyframeAnimations.degreeVec(0f, 0f, -15f));
+        this.legBackLeft.offsetPos(KeyframeAnimations.posVec(0f, 0f, 0f));
+        this.legFrontRight.offsetRotation(KeyframeAnimations.degreeVec(0f, 0f, -30f));
+        this.legFrontRight.offsetPos(KeyframeAnimations.posVec(-1f, -1f, 0f));
+        this.legFrontLeft.offsetRotation(KeyframeAnimations.degreeVec(0f, 0f, -7.5f));
+        this.legFrontLeft.offsetPos(KeyframeAnimations.posVec(1f, -0.25f, 0f));
+        this.tail.offsetRotation(KeyframeAnimations.degreeVec(162.35f, 11.59f, 38.36f));
+        this.tail.offsetPos(KeyframeAnimations.posVec(0f, -0.29f, 0.15f));
+        this.mane.offsetRotation(KeyframeAnimations.degreeVec(7.5f, 0f, 0f));
+        this.mane.offsetPos(KeyframeAnimations.posVec(0f, -1f, 0.75f));
+        this.root.offsetRotation(KeyframeAnimations.degreeVec(0f, 0f, 90f));
+        this.root.offsetPos(KeyframeAnimations.posVec(0f, -5f, 0f));
         if (this.earRight.isPresent()) {
-            this.earRight.get().offsetRotation(KeyframeAnimations.degreeVec(9.64f, -8f, 39.32f));
-            this.earRight.get().offsetPos(KeyframeAnimations.posVec(0f, -0.5f, 0f));
+            this.earRight.get().offsetRotation(KeyframeAnimations.degreeVec(40.11192f, -29.43433f, -3.24563f));
+            this.earRight.get().offsetPos(KeyframeAnimations.posVec(0f, -0.25f, 0f));
+        }
+        if (this.earLeft.isPresent()) {
+            this.earLeft.get().offsetRotation(KeyframeAnimations.degreeVec(38.7522f, -4.33973f, 12.33768f));
+            this.earLeft.get().offsetPos(KeyframeAnimations.posVec(0f, -0.25f, 0f));
         }
     }
 
@@ -335,6 +344,33 @@ public class DogModel extends EntityModel<Dog> {
         }
         if (this.earLeft.isPresent()) {
             this.earLeft.get().offsetRotation(KeyframeAnimations.degreeVec(53.71f, -14.26f, 10.25f));
+            this.earLeft.get().offsetPos(KeyframeAnimations.posVec(0f, -0.5f, 0f));
+        }
+    }
+
+    public void setupRestPose(Dog dog, float limbSwing, float limbSwingAmount, float partialTickTime) {
+        this.head.offsetRotation(KeyframeAnimations.degreeVec(-7.54f, 0.76f, 2.5f));
+        this.head.offsetPos(KeyframeAnimations.posVec(0f, -5f, 2f));
+        this.body.offsetRotation(KeyframeAnimations.degreeVec(0.5f, 0f, 0f));
+        this.body.offsetPos(KeyframeAnimations.posVec(0f, -6.5f, 0f));
+        this.legBackRight.offsetRotation(KeyframeAnimations.degreeVec(-90f, 22.5f, 0f));
+        this.legBackRight.offsetPos(KeyframeAnimations.posVec(-0.5f, -7f, 1f));
+        this.legBackLeft.offsetRotation(KeyframeAnimations.degreeVec(-90f, -22.5f, 0f));
+        this.legBackLeft.offsetPos(KeyframeAnimations.posVec(0.5f, -7f, 1f));
+        this.legFrontRight.offsetRotation(KeyframeAnimations.degreeVec(-87.41193f, 14.98539f, 0.66963f));
+        this.legFrontRight.offsetPos(KeyframeAnimations.posVec(0f, -6.75f, 2f));
+        this.legFrontLeft.offsetRotation(KeyframeAnimations.degreeVec(-87.41193f, -14.98539f, -0.66963f));
+        this.legFrontLeft.offsetPos(KeyframeAnimations.posVec(0f, -6.75f, 2f));
+        this.tail.offsetRotation(KeyframeAnimations.degreeVec(0f, -40f, 0f));
+        this.tail.offsetPos(KeyframeAnimations.posVec(0f, -7f, -0.25f));
+        this.mane.offsetRotation(KeyframeAnimations.degreeVec(-2.5f, 0f, 0f));
+        this.mane.offsetPos(KeyframeAnimations.posVec(0f, -6.5f, 2f));
+        if (this.earRight.isPresent()) {
+            this.earRight.get().offsetRotation(KeyframeAnimations.degreeVec(26.57f, 14.48f, -26.57f));
+            this.earRight.get().offsetPos(KeyframeAnimations.posVec(0f, -0.5f, 0f));
+        }
+        if (this.earLeft.isPresent()) {
+            this.earLeft.get().offsetRotation(KeyframeAnimations.degreeVec(26.57f, -14.48f, 26.57f));
             this.earLeft.get().offsetPos(KeyframeAnimations.posVec(0f, -0.5f, 0f));
         }
     }
@@ -402,18 +438,8 @@ public class DogModel extends EntityModel<Dog> {
         this.realTail.zRot = dog.getShakeAngle(partialTickTime, -0.2F);
     }
 
-    public void resetShakingDog(Dog dog, float limbSwing, float limbSwingAmount, float partialTickTime) {
-        this.mane.zRot = 0;
-        this.body.zRot = 0;
-        this.realTail.zRot = 0;
-    }
-
     public void translateBeggingDog(Dog dog, float limbSwing, float limbSwingAmount, float partialTickTime) {
         this.realHead.zRot = dog.getInterestedAngle(partialTickTime) + dog.getShakeAngle(partialTickTime, 0.0F);
-    }
-
-    public void resetBeggingDog(Dog dog, float limbSwing, float limbSwingAmount, float partialTickTime) {
-        this.realHead.zRot = 0;
     }
 
     Vector3f vecObj = new Vector3f();
@@ -445,7 +471,7 @@ public class DogModel extends EntityModel<Dog> {
     }
 
     public void resetAllPose() {
-        this.root.getAllParts().forEach(x -> ((DogModelPart)x).resetPose());
+        this.root.getAllParts().forEach(x -> ((DogModelPart) x).resetPose());
         this.realHead.resetPose();
         this.realTail.resetPose();
         this.earLeft.ifPresent(ear -> ear.resetPose());
@@ -466,16 +492,16 @@ public class DogModel extends EntityModel<Dog> {
         this.realTail.copyFrom(dogModel.realTail);
     }
 
-    public void resetPart(DogModelPart part, Dog dog) {
+    public void resetPart(ModelPart part, Dog dog) {
         if (part == this.tail && dog.getAnim().freeTail()) {
             this.tail.resetPose();
             this.tail.xRot = dog.getTailRotation();
             return;
         }
-        part.resetPose();
+        ((DogModelPart) part).resetPose();
     }
 
-    public void adjustAnimatedPart(DogModelPart part, Dog dog) {
+    public void adjustAnimatedPart(ModelPart part, Dog dog) {
         if (part == this.tail && dog.getAnim().freeTail()) {
             if (part.xRot > 3f) {
                 part.xRot = 3f;
@@ -483,15 +509,15 @@ public class DogModel extends EntityModel<Dog> {
         }
     }
 
-    public Optional<DogModelPart> searchForPartWithName(String name) {
+    public Optional<ModelPart> searchForPartWithName(String name) {
         if (this.root.hasChild(name)) 
-            return Optional.of((DogModelPart)this.root.getChild(name));
+            return Optional.of(this.root.getChild(name));
         if (name.equals("root"))
-            return Optional.of((DogModelPart)this.root);
+            return Optional.of(this.root);
         var partOptional = this.root.getAllParts()
-            .filter(part -> ((DogModelPart)part).hasChild(name))
+            .filter(part -> ((DogModelPart) part).hasChild(name))
             .findFirst();
-        return partOptional.map(part -> (DogModelPart)part.getChild(name));
+        return partOptional.map(part -> part.getChild(name));
     }
 
     protected void correctInitalPose() {
@@ -500,23 +526,11 @@ public class DogModel extends EntityModel<Dog> {
         this.tail.setInitialPose(PartPose.offset(tailX, tailY, tailZ));
     }
 
-    public boolean modelNeedRefreshBeforeNextRender(Dog dog) {
-        if (dog.getAnim() != DogAnimation.NONE)
-            return true;
-        if (dog.getDogPose().needRenderRefresh)
-            return true;
-        return false;
-    }
-
-    public boolean modelNeedRefreshBeforeCurrentRender(Dog dog) {
-        if (dog.getAnim() != DogAnimation.NONE)
-            return true;
-        if (dog.getDogPose().needRenderRefresh)
-            return true;
-        return false;
-    }
-
     public boolean acessoryShouldRender(Dog dog, AccessoryInstance inst) {
+        return true;
+    }
+
+    public boolean armorShouldRender(Dog dog) {
         return true;
     }
 
@@ -524,8 +538,30 @@ public class DogModel extends EntityModel<Dog> {
         return true;
     }
 
+    public boolean scaleBabyDog() {
+        return true;
+    }
+
     public boolean warnAccessory(Dog dog, Accessory inst)  {
         return false;
+    }
+
+    /**
+     * Custom pivot point <b>in Minecraft format</b>
+     * to convert from Blockbench, simply negate x, y
+     * then add 24 to y.
+     * @return
+     */
+    public @Nullable Vector3f getCustomRootPivotPoint() {
+        return null;
+    }
+
+    public boolean hasDefaultScale() {
+        return false;
+    }
+
+    public float getDefaultScale() {
+        return 1f;
     }
 
     public void setVisible(boolean visible) {
@@ -537,6 +573,13 @@ public class DogModel extends EntityModel<Dog> {
         this.legFrontLeft.visible = visible;
         this.tail.visible = visible;
         this.mane.visible = visible;
+    }
+
+    @Override
+    public void copyPropertiesTo(EntityModel<Dog> model) {
+        super.copyPropertiesTo(model);
+        if (!this.scaleBabyDog())
+            model.young = false;
     }
 
     public boolean tickClient() { return false; }
@@ -558,9 +601,11 @@ public class DogModel extends EntityModel<Dog> {
 
     @Override
     public void renderToBuffer(PoseStack p_102034_, VertexConsumer p_102035_, int p_102036_, int p_102037_, float p_102038_, float p_102039_, float p_102040_, float p_102041_) {
+        var pivot = DEFAULT_ROOT_PIVOT;
+        var custom_pivot = getCustomRootPivotPoint();
         p_102034_.pushPose();
         p_102034_.translate((double)(root.x / 16.0F), (double)(root.y / 16.0F), (double)(root.z / 16.0F));
-        p_102034_.translate((double)(0 / 16.0F), (double)(15 / 16.0F), (double)(0 / 16.0F));
+        p_102034_.translate((double)(pivot.x / 16.0F), (double)(pivot.y / 16.0F), (double)(pivot.z / 16.0F));
         if (root.zRot != 0.0F) {
             p_102034_.mulPose(Vector3f.ZP.rotation(root.zRot));
         }
@@ -577,9 +622,9 @@ public class DogModel extends EntityModel<Dog> {
         root.xRot = 0; root.yRot = 0; root.zRot = 0;
         root.x = 0; root.y = 0; root.z = 0;
         p_102034_.pushPose();
-        p_102034_.translate((double)(0 / 16.0F), (double)(-15 / 16.0F), (double)(0 / 16.0F));
+        p_102034_.translate((double)(-pivot.x / 16.0F), (double)(-pivot.y / 16.0F), (double)(-pivot.z / 16.0F));
         
-        if (this.young) {
+        if (this.young && this.scaleBabyDog()) {
 
             boolean headVisible0 = this.head.visible;
             
@@ -606,5 +651,9 @@ public class DogModel extends EntityModel<Dog> {
         p_102034_.popPose();
         root.xRot = xRot0; root.yRot = yRot0; root.zRot = zRot0;
         root.x = x0; root.y = y0; root.z = z0;
+    }
+
+    public boolean modelNeedRefreshBeforeNextRender(Dog dog) {
+        return false;
     }
 }

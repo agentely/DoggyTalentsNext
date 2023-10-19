@@ -75,7 +75,7 @@ public class DogRenderer extends MobRenderer<Dog, DogModel> {
             this.model.setColor(f, f, f);
         }
 
-        if (this.model.modelNeedRefreshBeforeCurrentRender(dog)) {
+        if (this.model.modelNeedRefreshBeforeNextRender(dog)) {
             this.model.resetAllPose();
         }
 
